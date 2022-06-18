@@ -24,7 +24,7 @@ abstract contract VersionedInitializable {
   /**
    * @dev Indicates that the contract is in the process of being initialized.
    */
-  bool private initializing;
+  bool public initializing;
 
   /**
    * @dev Modifier to use in the initializer function of a contract.
@@ -32,7 +32,7 @@ abstract contract VersionedInitializable {
   modifier initializer() {
     uint256 revision = getRevision();
     require(
-      isConstructor() || revision > lastInitializedRevision || initializing,
+      initializing || isConstructor() || revision > lastInitializedRevision,
       'Contract instance has already been initialized'
     );
 

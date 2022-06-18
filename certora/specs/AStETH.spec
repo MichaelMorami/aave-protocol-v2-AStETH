@@ -6,6 +6,7 @@ using DummyERC20A as UNDERLYING_ASSET_ADDRESS
 using DummyERC20B as RESERVE_TREASURY_ADDRESS
 
 methods {     
+    setInitializing(bool) envfree
     initialize(uint8, string, string) envfree
     balanceOf(address) returns (uint256) envfree
     scaledBalanceOf(address) returns (uint256) envfree
@@ -51,25 +52,12 @@ methods {
  *                METHOD INTEGRITY                *
  **************************************************/
 
-//  deposit X stETH to mint X astETH * Total astETH supply increases by X.
-
-rule integrityOfMint(address user, uint256 amount, uint256 index) {
-	env e;
-    // for onlyLendingPool modifier
-    require e.msg.sender == LENDING_POOL;
-
-    mathint totalSupplyBefore = totalSupply();
-    mint(e, user, amount, index);
-    mathint totalSupplyAfter = totalSupply();
-
-    assert amount != 0 => totalSupplyBefore < totalSupplyAfter;
-}
-
 rule canOnlyInitializedOnce(uint8 underlyingAssetDecimals,
     string tokenName,
     string tokenSymbol)
 description "contract can only be initialized once"
 {
+    // setInitializing(false);
     initialize(underlyingAssetDecimals, tokenName, tokenSymbol);
 
     initialize@withrevert(underlyingAssetDecimals, tokenName, tokenSymbol);
@@ -86,7 +74,9 @@ rule burnIntegrity(address user, address receiverOfUnderlying,
     env e;
     // for onlyLendingPool modifier
     require e.msg.sender == LENDING_POOL;
-    uint256 amountScaled = _toInternalAmount(e, amount, stEthRebasingIndex, aaveLiquidityIndex);
+    // uint256 amountScaled = _toInternalAmount(e, amount, stEthRebasingIndex, aaveLiquidityIndex);
+    uint256 amountScaled = amount;
+    require amount!=0 && amountScaled!=0;
     mathint _totalSupply = totalSupply();
     uint256 _balance = balanceOf(user);
     uint256 _underlyingBalance = UNDERLYING_ASSET_ADDRESS.balanceOf(receiverOfUnderlying);
@@ -98,8 +88,23 @@ rule burnIntegrity(address user, address receiverOfUnderlying,
     assert _totalSupply-amountScaled == totalSupply_;
     assert _balance-amountScaled == balance_;
     assert _underlyingBalance+amount == underlyingBalance_;
-
 }
+
+//  deposit X stETH to mint X astETH * Total astETH supply increases by X.
+
+rule integrityOfMint(address user, uint256 amount, uint256 index) {
+	env e;
+    // for onlyLendingPool modifier
+    require e.msg.sender == LENDING_POOL;
+
+    mathint totalSupplyBefore = totalSupply();
+    mint(e, user, amount, index);
+    mathint totalSupplyAfter = totalSupply();
+
+    assert amount != 0 => totalSupplyBefore < totalSupplyAfter;
+}
+
+
 // rule depositAdditivity(address recipient, uint256 amount1, uint256 amount2, uint16 referralCode, bool fromUnderlying) {
 // 	env e;
 // 	setup(e, recipient);

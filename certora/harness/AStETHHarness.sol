@@ -14,4 +14,8 @@ contract AStETHHarness is AStETH {
     string memory tokenSymbol,
     address incentivesController
   ) public AStETH(pool, underlyingAssetAddress, reserveTreasuryAddress, tokenName, tokenSymbol, incentivesController) {}
+
+  function setInitializing(bool _init) public {
+    initializing = _init;
+  }
 }
