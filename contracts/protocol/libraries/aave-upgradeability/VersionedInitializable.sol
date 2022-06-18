@@ -32,7 +32,7 @@ abstract contract VersionedInitializable {
   modifier initializer() {
     uint256 revision = getRevision();
     require(
-      initializing || isConstructor() || revision > lastInitializedRevision,
+      isConstructor() || revision > lastInitializedRevision || initializing,
       'Contract instance has already been initialized'
     );
 

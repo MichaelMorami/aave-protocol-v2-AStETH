@@ -1,11 +1,12 @@
 import "./AStETH_summerizations.spec"
 
 using SymbolicLendingPool as LENDING_POOL
-using DummyERC20A as UNDERLYING_ASSET
-using DummyERC20B as RESERVE_TREASURY
+using IncentivesControllerMock as _incentivesController
+using DummyERC20A as UNDERLYING_ASSET_ADDRESS
+using DummyERC20B as RESERVE_TREASURY_ADDRESS
 
-methods {    
-    
+methods {     
+    initialize(uint8, string, string) envfree
     balanceOf(address) returns (uint256) envfree
     scaledBalanceOf(address) returns (uint256) envfree
     internalBalanceOf(address) returns (uint256) envfree
@@ -19,6 +20,9 @@ methods {
     transferUnderlyingTo(address, uint256) returns (uint256)
     permit(address, address, uint256, uint256, uint8, bytes32, bytes32)
 
+    UNDERLYING_ASSET_ADDRESS.balanceOf(address user) returns(uint256) envfree;
+    RESERVE_TREASURY_ADDRESS.balanceOf(address user) returns(uint256) envfree;
+
     // IncentivizedERC20 methods:
     // handleAction(address user, uint256 userBalance, uint256 totalSupply) => DISPATCHER(true)
 }
@@ -31,8 +35,6 @@ methods {
  /**************************************************
  *                GHOSTS AND HOOKS                *
  **************************************************/
-
-//  ghost totalSupply
 
 
  /**************************************************
@@ -63,29 +65,41 @@ rule integrityOfMint(address user, uint256 amount, uint256 index) {
     assert amount != 0 => totalSupplyBefore < totalSupplyAfter;
 }
 
+rule canOnlyInitializedOnce(uint8 underlyingAssetDecimals,
+    string tokenName,
+    string tokenSymbol)
+description "contract can only be initialized once"
+{
+    initialize(underlyingAssetDecimals, tokenName, tokenSymbol);
 
-rule integrityOfTransferUnderlyingTo(address user, uint256 amount) {
+    initialize@withrevert(underlyingAssetDecimals, tokenName, tokenSymbol);
+    bool secondSucceeded = !lastReverted;
+
+    assert secondSucceeded==false;
+}
+
+
+rule burnIntegrity(address user, address receiverOfUnderlying,
+    uint256 amount, uint256 index, uint256 stEthRebasingIndex,
+    uint256 aaveLiquidityIndex)
+{
     env e;
     // for onlyLendingPool modifier
     require e.msg.sender == LENDING_POOL;
-    require user != currentContract;
+    uint256 amountScaled = _toInternalAmount(e, amount, stEthRebasingIndex, aaveLiquidityIndex);
+    mathint _totalSupply = totalSupply();
+    uint256 _balance = balanceOf(user);
+    uint256 _underlyingBalance = UNDERLYING_ASSET_ADDRESS.balanceOf(receiverOfUnderlying);
+    burn(e, user, receiverOfUnderlying, amount, index);
+    mathint totalSupply_ = totalSupply();
+    uint256 balance_ = balanceOf(user);
+    uint256 underlyingBalance_ = UNDERLYING_ASSET_ADDRESS.balanceOf(receiverOfUnderlying);
 
-    mathint totalSupplyBefore = totalSupply();
-    mathint userBalanceBefore = balanceOf(user);
-
-    uint256 amountTransfered = transferUnderlyingTo(e, user, amount);
-
-    mathint totalSupplyAfter = totalSupply();
-    mathint userBalanceAfter = balanceOf(user);
-
-    assert userBalanceAfter == userBalanceBefore + amountTransfered;
-    assert false;
+    assert _totalSupply-amountScaled == totalSupply_;
+    assert _balance-amountScaled == balance_;
+    assert _underlyingBalance+amount == underlyingBalance_;
 
 }
-
-// solvency invariant for sumall balances <= underlying_asset.balanceOf(Pool)
-
-
 // rule depositAdditivity(address recipient, uint256 amount1, uint256 amount2, uint16 referralCode, bool fromUnderlying) {
 // 	env e;
 // 	setup(e, recipient);
