@@ -5,8 +5,8 @@ methods {
     _stEthRebasingIndex() returns (uint256) => rebasingRatio()
     
     // Simplifications:
-    rayMul(uint256 x, uint256 y ) => identity(x, y);
-    rayDiv(uint256 x, uint256 y ) => identity(x, y);
+    rayMul(uint256 x, uint256 y ) returns (uint256) => identity(x, y);
+    rayDiv(uint256 x, uint256 y ) returns (uint256) => identity(x, y);
 }
 
 function identity (uint256 x, uint256 y) returns uint256{

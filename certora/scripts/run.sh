@@ -41,7 +41,8 @@ certoraRun certora/harness/AStETHHarness.sol certora/harness/IncentivesControlle
            --solc solc6.12 \
            --optimistic_loop \
            --settings -smt_nonLinearArithmetic=true \
-           --cloud \           
+           --cloud \
            --msg "AStETH rule sanity"
-           
+
+#    --rule IntegrityOfBurn \         
 #--rule integrityOfMint \
