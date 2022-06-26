@@ -6,7 +6,7 @@ using DummyERC20A as UNDERLYING_ASSET_ADDRESS
 using DummyERC20B as RESERVE_TREASURY_ADDRESS
 
 methods {     
-    setInitializing(bool) envfree    
+    initializing() envfree
     initialize(uint8, string, string) envfree
     nonces(address) returns(uint256) envfree
     allowance(address, address) returns(uint256) envfree
@@ -51,7 +51,7 @@ ghost balanceSum() returns uint256 {
     init_state axiom balanceSum() == 0;
 }
 
-hook Sstore balanceOf[KEY address user] uint balance (uint oldBalance) STORAGE {
+hook Sstore _balances[KEY address user] uint balance (uint oldBalance) STORAGE {
 	havoc balanceSum assuming balanceSum@new() == balanceSum@old() + balance - oldBalance;
 }
 
@@ -79,7 +79,7 @@ rule canOnlyInitializedOnce(uint8 underlyingAssetDecimals,
     string tokenSymbol)
 description "contract can only be initialized once"
 {
-    setInitializing(false);
+    require initializing() == false;
     initialize(underlyingAssetDecimals, tokenName, tokenSymbol);
 
     initialize@withrevert(underlyingAssetDecimals, tokenName, tokenSymbol);
@@ -88,6 +88,41 @@ description "contract can only be initialized once"
     assert secondSucceeded==false;
 }
 
+rule balanceOfChange(address user1, address user2, method f)
+{
+	env e;
+	require user1!=user2;
+	uint256 _balanceA = balanceOf(user1);
+	uint256 _balanceB = balanceOf(user2);
+	 
+	calldataarg arg;
+	f(e, arg); 
+
+	uint256 balanceA_ = balanceOf(user1);
+	uint256 balanceB_ = balanceOf(user2);
+	
+	assert (_balanceA == balanceA_ || _balanceB == balanceB_ || 
+        (_balanceA != balanceA_ && _balanceB != balanceB_ && _balanceA+_balanceB == balanceA_+balanceB_)
+    );
+}
+
+rule integirtyBalanceOfTotalSupply(address user, method f ) filtered {
+	f -> f.selector != transferFrom(address,address,uint256).selector
+        && f.selector != transfer(address,uint256).selector
+        && f.selector != transferOnLiquidation(address,address,uint256).selector 
+	}
+{
+	env e;
+	uint256 _balanceA = balanceOf(user);
+	uint256 _totalSupply = totalSupply();
+	 
+	calldataarg arg;
+	f(e, arg); 
+	uint256 balanceA_ = balanceOf(user);
+	uint256 totalSupply_ = totalSupply();
+
+	assert  (balanceA_ != _balanceA  => (balanceA_ - _balanceA  == totalSupply_ - _totalSupply));
+}
 
 rule integrityOfBurn(address user, address receiverOfUnderlying,
     uint256 amount, uint256 index, uint256 stEthRebasingIndex,
@@ -109,10 +144,24 @@ rule integrityOfBurn(address user, address receiverOfUnderlying,
     assert receiverOfUnderlying!=currentContract => _underlyingBalance+amount == underlyingBalance_;
 }
 
+rule burnAdditive(address user, address receiverOfUnderlying, uint256 amount1,  uint256 amount2, uint256 index) {
+	env e;
+	storage initialStorage = lastStorage;
+	burn(e, user, receiverOfUnderlying, amount1, index);
+	burn(e, user, receiverOfUnderlying, amount2, index);
+	uint256 balanceScenario1 = balanceOf(user);
+    mathint totalSupplyScenario1 = totalSupply();
+	uint256 amount = amount1 + amount2;
+	burn(e, user, receiverOfUnderlying, amount, index) at initialStorage;
+	uint256 balanceScenario2 = balanceOf(user);
+    mathint totalSupplyScenario2 = totalSupply();
+
+	assert balanceScenario1 == balanceScenario2, "burn is not additive";
+    assert totalSupplyScenario1 == totalSupplyScenario2;
+}
 
 rule burnNoInterfernece(address user, address user2, address receiverOfUnderlying, address receiverOfUnderlying2,
-    uint256 amount, uint256 index, uint256 stEthRebasingIndex,
-    uint256 aaveLiquidityIndex)
+    uint256 amount, uint256 index, uint256 stEthRebasingIndex, uint256 aaveLiquidityIndex)
 {
     env e;
     // for onlyLendingPool modifier
@@ -127,8 +176,6 @@ rule burnNoInterfernece(address user, address user2, address receiverOfUnderlyin
     assert receiverOfUnderlying!=receiverOfUnderlying2 && receiverOfUnderlying2!=currentContract =>  _underlyingBalance==underlyingBalance_;
 }
 
-//  deposit X stETH to mint X astETH * Total astETH supply increases by X.
-
 rule integrityOfMint(address user, uint256 amount, uint256 index) {
 	env e;
     mathint _totalSupply = totalSupply();
@@ -136,10 +183,25 @@ rule integrityOfMint(address user, uint256 amount, uint256 index) {
     mint(e, user, amount, index);
     mathint totalSupply_ = totalSupply();
     uint256 balance_ = balanceOf(user);
-
     assert e.msg.sender == LENDING_POOL;
     assert amount != 0 => _totalSupply < totalSupply_;
     assert amount != 0 => _balance < balance_;
+}
+
+
+rule mintAdditive(address user, uint256 amount1, uint256 amount2, uint256 index) {
+    env e;
+	storage initialStorage = lastStorage;
+	mint(e, user, amount1, index);
+	mint(e, user, amount2, index);
+	uint256 balanceScenario1 = balanceOf(user);
+    mathint totalSupplyScenario1 = totalSupply();
+	uint256 amount = amount1 + amount2;
+	mint(e, user, amount, index) at initialStorage;
+	uint256 balanceScenario2 = balanceOf(user);
+    mathint totalSupplyScenario2 = totalSupply();
+	assert balanceScenario1 == balanceScenario2, "burn is not additive";
+    assert totalSupplyScenario1 == totalSupplyScenario2;
 }
 
 rule mintNoInterfernece(address user, address user2,
@@ -169,6 +231,15 @@ rule mintToTreasuryEquivalence(uint256 amount, uint256 index) {
     assert e.msg.sender == LENDING_POOL;
     assert _totalSupply == totalSupply_;
     assert _balance == balance_;
+}
+
+rule inverseMintBurn(address user, address receiverOfUnderlying, uint256 amount, uint256 index) {
+	env e;
+	uint256 _balance = balanceOf(user);
+	mint(e, user, amount, index);
+	burn(e, user, receiverOfUnderlying, amount, index);
+	uint256 balance_ = balanceOf(user);
+	assert _balance == balance_, "burn is not the inverse of mint";
 }
 
 rule transferOnLiquidation(address from, address to, uint256 value) {

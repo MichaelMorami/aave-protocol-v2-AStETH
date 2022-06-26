@@ -15,10 +15,6 @@ contract AStETHHarness is AStETH {
     address incentivesController
   ) public AStETH(pool, underlyingAssetAddress, reserveTreasuryAddress, tokenName, tokenSymbol, incentivesController) {}
 
-  function setInitializing(bool _init) public {
-    initializing = _init;
-  }
-
   function nonces(address owner) public view returns (uint256) {
     return _nonces[owner];
   }
