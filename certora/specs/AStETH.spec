@@ -2,10 +2,11 @@ import "./AStETH_summerizations.spec"
 
 using SymbolicLendingPool as LENDING_POOL
 using IncentivesControllerMock as _incentivesController
-using DummyERC20A as UNDERLYING_ASSET_ADDRESS
-using DummyERC20B as RESERVE_TREASURY_ADDRESS
+using DummyERC20A as UNDERLYING_ASSET
+using DummyERC20B as RESERVE_TREASURY
 
 methods {     
+    getRevision() returns (uint256)
     initializing() envfree
     initialize(uint8, string, string) envfree
     nonces(address) returns(uint256) envfree
@@ -23,10 +24,13 @@ methods {
     transferOnLiquidation(address, address, uint256)
     transferUnderlyingTo(address, uint256) returns (uint256)
     permit(address, address, uint256, uint256, uint8, bytes32, bytes32)
+    isContractIsTrue(address) returns (bool) envfree
 
-    UNDERLYING_ASSET_ADDRESS.balanceOf(address user) returns(uint256) envfree
-    RESERVE_TREASURY_ADDRESS.balanceOf(address user) returns(uint256) envfree
+    UNDERLYING_ASSET.balanceOf(address user) returns(uint256) envfree
+    UNDERLYING_ASSET.totalSupply() returns(uint256) envfree
+    RESERVE_TREASURY.balanceOf(address user) returns(uint256) envfree
 
+    LENDING_POOL.aToken() envfree
     LENDING_POOL.getReserveNormalizedIncome(address asset) returns(uint256) envfree
     // IncentivizedERC20 methods:
     // handleAction(address user, uint256 userBalance, uint256 totalSupply) => DISPATCHER(true)
@@ -132,11 +136,11 @@ rule integrityOfBurn(address user, address receiverOfUnderlying,
     uint256 amountScaled = returnAmount(amount, stEthRebasingIndex, aaveLiquidityIndex);
     mathint _totalSupply = totalSupply();
     uint256 _balance = balanceOf(user);
-    uint256 _underlyingBalance = UNDERLYING_ASSET_ADDRESS.balanceOf(receiverOfUnderlying);
+    uint256 _underlyingBalance = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying);
     burn(e, user, receiverOfUnderlying, amount, index);
     mathint totalSupply_ = totalSupply();
     uint256 balance_ = balanceOf(user);
-    uint256 underlyingBalance_ = UNDERLYING_ASSET_ADDRESS.balanceOf(receiverOfUnderlying);
+    uint256 underlyingBalance_ = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying);
 
     assert e.msg.sender == LENDING_POOL;
     assert _totalSupply-amountScaled == totalSupply_;
@@ -167,10 +171,10 @@ rule burnNoInterfernece(address user, address user2, address receiverOfUnderlyin
     // for onlyLendingPool modifier
     require e.msg.sender == LENDING_POOL;
     uint256 _balance = balanceOf(user2);
-    uint256 _underlyingBalance = UNDERLYING_ASSET_ADDRESS.balanceOf(receiverOfUnderlying2);
+    uint256 _underlyingBalance = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying2);
     burn(e, user, receiverOfUnderlying, amount, index);
     uint256 balance_ = balanceOf(user2);
-    uint256 underlyingBalance_ = UNDERLYING_ASSET_ADDRESS.balanceOf(receiverOfUnderlying2);
+    uint256 underlyingBalance_ = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying2);
 
     assert user!=user2 => _balance==balance_;
     assert receiverOfUnderlying!=receiverOfUnderlying2 && receiverOfUnderlying2!=currentContract =>  _underlyingBalance==underlyingBalance_;
@@ -219,7 +223,7 @@ rule mintNoInterfernece(address user, address user2,
 rule mintToTreasuryEquivalence(uint256 amount, uint256 index) {
     env e;
     storage initialStorage = lastStorage;
-    address user = RESERVE_TREASURY_ADDRESS;
+    address user = RESERVE_TREASURY;
     mint(e, user, amount, index);
     mathint _totalSupply = totalSupply();
     uint256 _balance = balanceOf(user);
@@ -293,7 +297,7 @@ rule scaledTotalSupplyEquivalance(address user) {
     uint256 ts = totalSupply();
     assert sts == scaledTotalSupply;
     // how to use rayMul directly?
-    assert ts == identity(sts, LENDING_POOL.getReserveNormalizedIncome(UNDERLYING_ASSET_ADDRESS)); 
+    assert ts == identity(sts, LENDING_POOL.getReserveNormalizedIncome(UNDERLYING_ASSET)); 
     assert sts == its * rebasingRatio() / ray();
 }
 
@@ -307,15 +311,15 @@ rule scaledBalanceEquivalance(address user) {
     uint256 bc = balanceOf(user);
     assert sbc == scaledBalanceOf;
     // how to use rayMul directly?
-    assert bc == identity(ibc, LENDING_POOL.getReserveNormalizedIncome(UNDERLYING_ASSET_ADDRESS)); 
+    assert bc == identity(ibc, LENDING_POOL.getReserveNormalizedIncome(UNDERLYING_ASSET)); 
     assert sbc == ibc * rebasingRatio() / ray();
 }
 
 rule transferUnderlyingTo(address target, uint256 amount) {
     env e;
-    uint256 _balance = UNDERLYING_ASSET_ADDRESS.balanceOf(target);
+    uint256 _balance = UNDERLYING_ASSET.balanceOf(target);
     transferUnderlyingTo(e, target, amount);
-    uint256 balance_ = UNDERLYING_ASSET_ADDRESS.balanceOf(target);
+    uint256 balance_ = UNDERLYING_ASSET.balanceOf(target);
     assert e.msg.sender == LENDING_POOL;
     if (target!=currentContract)
         assert _balance + amount == balance_;
@@ -330,19 +334,19 @@ rule transferUnderlyingToAdditivity(address target, uint256 amount1, uint256 amo
     transferUnderlyingTo(e, target, amount1);
     transferUnderlyingTo(e, target, amount2);
 
-    uint256 _balance = UNDERLYING_ASSET_ADDRESS.balanceOf(target);
+    uint256 _balance = UNDERLYING_ASSET.balanceOf(target);
 
     transferUnderlyingTo(e, target, amount) at init;
-    uint256 balance_ = UNDERLYING_ASSET_ADDRESS.balanceOf(target);
+    uint256 balance_ = UNDERLYING_ASSET.balanceOf(target);
     assert _balance == balance_;
 }
 
 
 rule transferUnderlyingToNoInterfernece(address target, address target2, uint256 amount) {
     env e;
-    uint256 _balance = UNDERLYING_ASSET_ADDRESS.balanceOf(target2);
+    uint256 _balance = UNDERLYING_ASSET.balanceOf(target2);
     transferUnderlyingTo(e, target, amount);
-    uint256 balance_ = UNDERLYING_ASSET_ADDRESS.balanceOf(target2);
+    uint256 balance_ = UNDERLYING_ASSET.balanceOf(target2);
     assert target!=target2 && target2!=currentContract => _balance == balance_;
 }
 
