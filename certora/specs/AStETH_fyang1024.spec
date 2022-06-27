@@ -67,6 +67,62 @@ rule proportionalBalancesAndTotalSupplies(address user) {
     @Rule
 
     @Description:
+        Burning and minting are invert operations within the AStETH context
+
+    @Formula:
+        {
+
+        }
+
+        burn()
+        mint()
+        
+        {
+            _ATokenInternalBalance == ATokenInternalBalance_ &&
+            _ATokenScaledBalance == ATokenScaledBalance_ &&
+            _ATokenBalance == ATokenBalance_ &&
+            _ATokenInternalTotalSupply == ATokenInternalTotalSupply_ &&
+            _ATokenScaledTotalSupply == ATokenScaledTotalSupply_ &&
+            _ATokenTotalSupply == ATokenTotalSupply_
+        }
+
+    @Note:
+
+    @Link:
+*/
+
+rule burnMintInvertability(address user, uint256 amount, uint256 index, address receiver){
+    env e;
+    
+    mathint _ATokenInternalBalance = internalBalanceOf(user);
+    mathint _ATokenScaledBalance = scaledBalanceOf(user);
+    mathint _ATokenBalance = balanceOf(user);
+    mathint _ATokenInternalTotalSupply = internalTotalSupply();
+    mathint _ATokenScaledTotalSupply = scaledTotalSupply();
+    mathint _ATokenTotalSupply = totalSupply();
+    
+    burn(e, user, receiver, amount, index);
+    mint(e, user, amount, index);
+    
+    mathint ATokenInternalBalance_ = internalBalanceOf(user);
+    mathint ATokenScaledBalance_ = scaledBalanceOf(user);
+    mathint ATokenBalance_ = balanceOf(user);
+    mathint ATokenInternalTotalSupply_ = internalTotalSupply();
+    mathint ATokenScaledTotalSupply_ = scaledTotalSupply();
+    mathint ATokenTotalSupply_ = totalSupply();
+    
+    assert _ATokenInternalBalance == ATokenInternalBalance_;
+    assert _ATokenScaledBalance == ATokenScaledBalance_;
+    assert _ATokenBalance == ATokenBalance_;
+    assert _ATokenInternalTotalSupply == ATokenInternalTotalSupply_;
+    assert _ATokenScaledTotalSupply == ATokenScaledTotalSupply_;
+    assert _ATokenTotalSupply == ATokenTotalSupply_;
+}
+
+/*
+    @Rule
+
+    @Description:
         the mint function and the mintToTreasury function should be equivalent
 
     @Formula:
