@@ -5,13 +5,16 @@ pragma experimental ABIEncoderV2;
 
 import {SafeERC20} from '../../contracts/dependencies/openzeppelin/contracts/SafeERC20.sol';
 import "../../contracts/interfaces/IAToken.sol";
+import {Address} from "../../contracts/dependencies/openzeppelin/contracts/Address.sol";
+
 contract SymbolicLendingPool  {
 
     using SafeERC20 for IERC20;
 
-    address aToken; 
-    uint256 liquidityIndex = 1; //TODO 
-    uint256 data;
+    address public aToken; 
+    uint256 public liquidityIndex = 1; //TODO 
+    uint256 public data;
+    address public Asset;
 
     function deposit(
     address asset,
@@ -19,8 +22,8 @@ contract SymbolicLendingPool  {
     address onBehalfOf,
     uint16 referralCode
   ) external {
-    address test = aToken;
-    IERC20(asset).safeTransferFrom(msg.sender, aToken, amount);
+    Asset = asset;
+    IERC20(Asset).safeTransferFrom(msg.sender, aToken, amount);
     IAToken(aToken).mint(onBehalfOf, amount,liquidityIndex );
   }
 
