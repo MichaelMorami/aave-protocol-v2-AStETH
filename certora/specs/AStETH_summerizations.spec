@@ -23,3 +23,7 @@ function identity (uint256 x, uint256 y) returns uint256{
 function returnAmount(uint256 amount, uint256 stEthRebasingIndex, uint256 aaveLiquidityIndex) returns uint256 {
     return amount;
 }
+
+function rebasingRatio() returns uint256 {
+    return 1000000000000000000000000000; // = one RAY
+}

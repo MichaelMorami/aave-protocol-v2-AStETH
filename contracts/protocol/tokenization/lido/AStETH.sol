@@ -36,6 +36,7 @@ contract AStETH is VersionedInitializable, IncentivizedERC20, IAToken {
   address public immutable UNDERLYING_ASSET_ADDRESS;
   address public immutable RESERVE_TREASURY_ADDRESS;
   ILendingPool public immutable POOL;
+  uint256 count = 0;
 
   /// @dev owner => next valid nonce to submit with permit()
   mapping(address => uint256) public _nonces;
@@ -61,6 +62,10 @@ contract AStETH is VersionedInitializable, IncentivizedERC20, IAToken {
   }
 
   function getRevision() internal pure virtual override returns (uint256) {
+    return ATOKEN_REVISION;
+  }
+
+  function getCount() external virtual returns (uint256) {
     return ATOKEN_REVISION;
   }
 

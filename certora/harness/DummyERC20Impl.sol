@@ -11,7 +11,7 @@ contract DummyERC20Impl is IERC20 {
     mapping (address => mapping (address => uint256)) allowances;
 
     string public name;
-    string public symbol;is
+    string public symbol;
     uint public decimals;
 
     function totalSupply() external view override returns (uint256) {

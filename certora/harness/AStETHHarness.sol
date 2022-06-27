@@ -16,10 +16,13 @@ contract AStETHHarness is AStETH {
     address incentivesController
   ) public AStETH(pool, underlyingAssetAddress, reserveTreasuryAddress, tokenName, tokenSymbol, incentivesController) {}
 
+  function nonces(address owner) public view returns (uint256) {
+    return _nonces[owner];
+  }
+
   function isContractIsTrue(address account) public view returns (bool){
       require(Address.isContract(account));
       return true;
   }
 
-  
 }
