@@ -6,9 +6,8 @@ fi
 certoraRun certora/harness/AStETHHarness.sol certora/harness/IncentivesControllerMock.sol certora/harness/SymbolicLendingPool.sol certora/harness/DummyERC20A.sol certora/harness/DummyERC20B.sol \
            --verify AStETHHarness:certora/specs/AStETH.spec \
            --link AStETHHarness:UNDERLYING_ASSET_ADDRESS=DummyERC20A AStETHHarness:POOL=SymbolicLendingPool AStETHHarness:_incentivesController=IncentivesControllerMock AStETHHarness:RESERVE_TREASURY_ADDRESS=DummyERC20B SymbolicLendingPool:aToken=AStETHHarness SymbolicLendingPool:Asset=DummyERC20A \
-           --solc solc6.12 \
+           --solc solc \
            --optimistic_loop \
-           --settings -smt_nonLinearArithmetic=true \
-           --staging \
-           $RULE \
-           --msg "AStETH $RULE $2"
+           --settings -smt_nonLinearArithmetic=true 
+        #    --$RULE 
+        #    --msg "AStETH rules"
