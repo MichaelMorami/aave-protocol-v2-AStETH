@@ -36,6 +36,7 @@ methods {
 
 // aToken is reserve token
 
+/*
 ghost sum_of_all_balances() returns uint256{
     // for the constructor - assuming that on the constructor the value of the ghost is 0
     init_state axiom sum_of_all_balances() == 0;
@@ -47,7 +48,7 @@ hook Sstore _balances[KEY address user] uint balance (uint oldBalance) STORAGE {
 
 invariant totalSupply_equals_sumOfAllBalances() 
  	totalSupply() == sum_of_all_balances()
-
+*/
 
 
 rule burnReducesTotalSupplyOfATokens(
