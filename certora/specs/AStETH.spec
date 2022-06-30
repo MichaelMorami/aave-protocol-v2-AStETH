@@ -595,24 +595,31 @@ rule AssetandTreasuryDifferentAddress(){
     assert UNDERLYING_ASSET != RESERVE_TREASURY, "this is to ensure that they are different addresses; needs to be verified on Deployed Contract";
 }
 
+//
+// checkingcorrectChainID TO BE RUN WITH DEPLOYED CONTRACT !
+//
 
- rule checkingcorrectChainID(){
-	env e; method f; calldataarg args;
-	f(e, args);
+//  rule checkingcorrectChainID(){
+// 	env e; method f; calldataarg args;
+// 	f(e, args);
 	
-    mathint _chainId = getChainID(e);
+//     mathint _chainId = getChainID(e);
 
-    assert _chainId == 1, "Checking if chainId is the correct one as Mainnet for Ethereum";
-}
+//     assert _chainId == 1, "Checking if chainId is the correct one as Mainnet for Ethereum";
+// }
 
- rule checkingsetDecimalsIsCorrect(){
-	env e; method f; calldataarg args;
-	f(e, args);
+//
+// checkingsetDecimalsIsCorrect TO BE RUN WITH DEPLOYED CONTRACT !
+//
+
+//  rule checkingsetDecimalsIsCorrect(){
+// 	env e; method f; calldataarg args;
+// 	f(e, args);
 	
-    mathint _SetDecimals = _getDecimals(e);
+//     mathint _SetDecimals = _getDecimals(e);
 
-    assert _SetDecimals == 18, "Checking if number of decimals is correct";
-}
+//     assert _SetDecimals == 18, "Checking if number of decimals is correct";
+// }
 
 
 rule BurningbyLendingPoolOnly(address user, address receiver, uint256 amount, uint256 index, method f) {
@@ -654,34 +661,7 @@ rule transferUnderlyingTobyLendingPoolOnly(address target, uint256 amount, metho
 
 }
 
-// rule BurnIncreaseBalanceofAddress0(address user, address receiver, uint256 amount, uint256 index) {
-// 	env e;
-
-//     address addresszero = 0x0000000000000000000000000000000000000000;
-//     mathint _ATokenInternalBalanceAddress0 = balanceOf(addresszero);
-   
-//     burn(e, user, receiver, amount, index);
-    
-//     mathint ATokenInternalBalanceAddress0_ = balanceOf(addresszero);
-   
-//     assert ATokenInternalBalanceAddress0_ > _ATokenInternalBalanceAddress0, "Balance of Address 0 should increase when burning";
-
-// }
-
-// rule BurnIncreaseBalanceofAddress0second(address user, address receiver, uint256 amount, uint256 index) {
-// 	env e;
-
-//     address addresszero = 0x0000000000000000000000000000000000000000;
-//     mathint _ATokenInternalBalanceAddress0 = internalBalanceOf(0x0);
-//     burn(e, user, receiver, amount, index);
-    
-//     mathint ATokenInternalBalanceAddress0_ = internalBalanceOf(0x0);
-
-//     assert ATokenInternalBalanceAddress0_ > _ATokenInternalBalanceAddress0, "Balance of Address 0 should increase when burning";
-
-// }
-
- rule checkingInternalAmountandBurnFunction(address user, address receiver, uint256 index, uint256 _amount, uint256 _stEthRebasingIndex, uint256 _aaveLiquidityIndex){
+rule checkingInternalAmountandBurnFunction(address user, address receiver, uint256 index, uint256 _amount, uint256 _stEthRebasingIndex, uint256 _aaveLiquidityIndex){
 	env e; method f; calldataarg args;
 	f(e, args);
     
