@@ -21,6 +21,7 @@ methods {
     transferOnLiquidation(address, address, uint256) 
     transferUnderlyingTo(address, uint256) returns (uint256) 
     permit(address, address, uint256, uint256, uint8, bytes32, bytes32) 
+    allowance(address, address) returns (uint256) envfree
 
     isContractIsTrue(address) returns (bool) envfree
 
@@ -562,4 +563,539 @@ rule nonrevertOfBurn(address user, address to, uint256 amount) {
 	 );
 	burn@withrevert(e, user, to, amount, index);
 	assert !lastReverted; 
+}
+
+
+/*****************************
+ *    IKHLAS - i01001        *
+ *****************************/
+
+
+ rule checkingGetRevisionFunction(){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _RevisionStored = _getRevision(e);
+
+    assert _RevisionStored <= max_uint, "Checking if GetRevision is within limits";
+}
+
+
+// rule MethodsVacuityCheck(method f) {
+// 	env e; calldataarg args;
+// 	f(e, args);
+// 	assert false, "this method should have a non reverting path";
+// }
+
+
+rule AssetandTreasuryDifferentAddress(){
+    env e; calldataarg args; method f;
+    require UNDERLYING_ASSET != RESERVE_TREASURY;
+    f(e, args);
+    assert UNDERLYING_ASSET != RESERVE_TREASURY, "this is to ensure that they are different addresses; needs to be verified on Deployed Contract";
+}
+
+
+ rule checkingcorrectChainID(){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _chainId = getChainID(e);
+
+    assert _chainId == 1, "Checking if chainId is the correct one as Mainnet for Ethereum";
+}
+
+ rule checkingsetDecimalsIsCorrect(){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _SetDecimals = _getDecimals(e);
+
+    assert _SetDecimals == 18, "Checking if number of decimals is correct";
+}
+
+
+rule BurningbyLendingPoolOnly(address user, address receiver, uint256 amount, uint256 index, method f) {
+	env e;
+
+    burn@withrevert(e, user, receiver, amount, index);
+    assert e.msg.sender != LENDING_POOL => lastReverted, "Burn function can only be called by LendingPool";
+}
+
+rule MintbyLendingPoolOnly(address user, uint256 amount, uint256 index, method f) {
+	env e;
+
+    mint@withrevert(e, user, amount, index);
+    assert e.msg.sender != LENDING_POOL => lastReverted, "Mint function can only be called by LendingPool";
+
+}
+
+rule MinttoTreasurybyLendingPoolOnly(uint256 amount, uint256 index, method f) {
+	env e;
+
+    mintToTreasury@withrevert(e, amount, index);
+    assert e.msg.sender != LENDING_POOL => lastReverted, "mintToTreasury function can only be called by LendingPool";
+
+}
+
+rule transferOnLiquidationbyLendingPoolOnly(address from, address to, uint256 value, method f) {
+	env e;
+
+    transferOnLiquidation@withrevert(e, from, to, value);
+    assert e.msg.sender != LENDING_POOL => lastReverted, "transferOnLiquidation function can only be called by LendingPool";
+
+}
+
+rule transferUnderlyingTobyLendingPoolOnly(address target, uint256 amount, method f) {
+	env e;
+
+    transferUnderlyingTo@withrevert(e, target, amount);
+    assert e.msg.sender != LENDING_POOL => lastReverted, "transferUnderlyingTo function can only be called by LendingPool";
+
+}
+
+// rule BurnIncreaseBalanceofAddress0(address user, address receiver, uint256 amount, uint256 index) {
+// 	env e;
+
+//     address addresszero = 0x0000000000000000000000000000000000000000;
+//     mathint _ATokenInternalBalanceAddress0 = balanceOf(addresszero);
+   
+//     burn(e, user, receiver, amount, index);
+    
+//     mathint ATokenInternalBalanceAddress0_ = balanceOf(addresszero);
+   
+//     assert ATokenInternalBalanceAddress0_ > _ATokenInternalBalanceAddress0, "Balance of Address 0 should increase when burning";
+
+// }
+
+// rule BurnIncreaseBalanceofAddress0second(address user, address receiver, uint256 amount, uint256 index) {
+// 	env e;
+
+//     address addresszero = 0x0000000000000000000000000000000000000000;
+//     mathint _ATokenInternalBalanceAddress0 = internalBalanceOf(0x0);
+//     burn(e, user, receiver, amount, index);
+    
+//     mathint ATokenInternalBalanceAddress0_ = internalBalanceOf(0x0);
+
+//     assert ATokenInternalBalanceAddress0_ > _ATokenInternalBalanceAddress0, "Balance of Address 0 should increase when burning";
+
+// }
+
+ rule checkingInternalAmountandBurnFunction(address user, address receiver, uint256 index, uint256 _amount, uint256 _stEthRebasingIndex, uint256 _aaveLiquidityIndex){
+	env e; method f; calldataarg args;
+	f(e, args);
+    
+    require _amount != 0;
+
+    
+    mathint _ATokenInternalBalance = internalBalanceOf(user);
+    mathint _ATokenScaledBalance = scaledBalanceOf(user);
+    mathint _ATokenBalance = balanceOf(user);
+	
+    burn(e, user, receiver, _amount, index);
+
+    mathint ATokenInternalBalance_ = internalBalanceOf(user);
+    mathint ATokenScaledBalance_ = scaledBalanceOf(user);
+    mathint ATokenBalance_ = balanceOf(user);
+    mathint _InternalAmount = _gettoInternalAmount(e, _amount, _stEthRebasingIndex, _aaveLiquidityIndex);
+    
+    assert  _InternalAmount != 0, "Ensuring amount scaled is not giving an invalid number";
+    assert _InternalAmount <=  max_uint, "Ensuring Internal Amount is within the max_uint limit";
+    assert (_ATokenScaledBalance - ATokenScaledBalance_ ) == _InternalAmount, "Ensuring actual burn amount matches the Internal Amount";
+}
+
+ rule checkingInternalAmountandMintFunction(address user, uint256 index, uint256 _amount, uint256 _stEthRebasingIndex, uint256 _aaveLiquidityIndex){
+	env e; method f; calldataarg args;
+	f(e, args);
+    
+    require _amount != 0;
+
+    
+    mathint _ATokenInternalBalance = internalBalanceOf(user);
+    mathint _ATokenScaledBalance = scaledBalanceOf(user);
+    mathint _ATokenBalance = balanceOf(user);
+	
+    mint(e, user, _amount, index);
+
+    mathint ATokenInternalBalance_ = internalBalanceOf(user);
+    mathint ATokenScaledBalance_ = scaledBalanceOf(user);
+    mathint ATokenBalance_ = balanceOf(user);
+    mathint _InternalAmount = _gettoInternalAmount(e, _amount, _stEthRebasingIndex, _aaveLiquidityIndex);
+    
+    assert  _InternalAmount != 0, "Ensuring amount scaled is not giving an invalid number";
+    assert _InternalAmount <=  max_uint, "Ensuring Internal Amount is within the max_uint limit";
+    assert (ATokenScaledBalance_ - _ATokenScaledBalance) == _InternalAmount, "Ensuring actual mint amount matches the Internal Amount";
+}
+
+rule MinttoTreasuryAmountZeroOrNot(uint256 amount, uint256 index, uint256 _stEthRebasingIndex, uint256 _aaveLiquidityIndex, method f) {
+	env e;
+
+    require e.msg.sender == LENDING_POOL;
+    mathint _ATokenBalance = balanceOf(RESERVE_TREASURY);
+
+
+    mintToTreasury(e, amount, index);
+
+    mathint _InternalAmount = _gettoInternalAmount(e, amount, _stEthRebasingIndex, _aaveLiquidityIndex);
+    mathint ATokenBalance_ = balanceOf(RESERVE_TREASURY);
+
+    if(amount == 0){
+    assert _ATokenBalance == ATokenBalance_, "No mint if amount is equal to zero";
+    }
+
+    else{
+    assert _ATokenBalance + _InternalAmount == ATokenBalance_, "Mint amount is equivalent to the calculated Internal Amount";
+
+    }
+
+}
+
+rule CheckingFunctiontransferOnLiquidation(address from, address to, uint256 value) {
+	env e;
+
+    require from != to;
+
+    mathint _ATokenInternalBalanceFROM = internalBalanceOf(from);
+    mathint _ATokenScaledBalanceFROM = scaledBalanceOf(from);
+    mathint _ATokenBalanceFROM = balanceOf(from);
+    mathint _ATokenInternalBalanceTO = internalBalanceOf(to);
+    mathint _ATokenScaledBalanceTO = scaledBalanceOf(to);
+    mathint _ATokenBalanceTO = balanceOf(to);
+    mathint _ATokenInternalTotalSupply = internalTotalSupply();
+    mathint _ATokenScaledTotalSupply = scaledTotalSupply();
+    mathint _ATokenTotalSupply = totalSupply();
+    
+    transferOnLiquidation(e, from, to, value);
+    
+    mathint ATokenInternalBalanceFROM_ = internalBalanceOf(from);
+    mathint ATokenScaledBalanceFROM_ = scaledBalanceOf(from);
+    mathint ATokenBalanceFROM_ = balanceOf(from);
+    mathint ATokenInternalBalanceTO_ = internalBalanceOf(to);
+    mathint ATokenScaledBalanceTO_ = scaledBalanceOf(to);
+    mathint ATokenBalanceTO_ = balanceOf(to);
+    mathint ATokenInternalTotalSupply_ = internalTotalSupply();
+    mathint ATokenScaledTotalSupply_ = scaledTotalSupply();
+    mathint ATokenTotalSupply_ = totalSupply();
+    
+    assert _ATokenInternalBalanceFROM == value + ATokenInternalBalanceFROM_;
+    assert _ATokenScaledBalanceFROM == value + ATokenScaledBalanceFROM_;
+    assert _ATokenBalanceFROM == value + ATokenBalanceFROM_;
+
+    assert _ATokenInternalBalanceTO + value == ATokenInternalBalanceTO_;
+    assert _ATokenScaledBalanceTO + value == ATokenScaledBalanceTO_;
+    assert _ATokenBalanceTO + value == ATokenBalanceTO_;
+
+    assert _ATokenInternalTotalSupply == ATokenInternalTotalSupply_;
+    assert _ATokenScaledTotalSupply == ATokenScaledTotalSupply_;
+    assert _ATokenTotalSupply == ATokenTotalSupply_;
+}
+
+
+rule transferOnLiquidationExceedingBalance(address from, address to, uint256 value, method f) {
+	env e;
+
+    mathint _ATokenInternalBalanceFROM = internalBalanceOf(from);
+    mathint _ATokenScaledBalanceFROM = scaledBalanceOf(from);
+    mathint _ATokenBalanceFROM = balanceOf(from);
+    mathint _ATokenInternalBalanceTO = internalBalanceOf(to);
+    mathint _ATokenScaledBalanceTO = scaledBalanceOf(to);
+    mathint _ATokenBalanceTO = balanceOf(to);
+    mathint _ATokenInternalTotalSupply = internalTotalSupply();
+    mathint _ATokenScaledTotalSupply = scaledTotalSupply();
+    mathint _ATokenTotalSupply = totalSupply();
+
+    require value > _ATokenBalanceFROM;
+    
+    transferOnLiquidation@withrevert(e, from, to, value);
+
+    mathint ATokenInternalBalanceFROM_ = internalBalanceOf(from);
+    mathint ATokenScaledBalanceFROM_ = scaledBalanceOf(from);
+    mathint ATokenBalanceFROM_ = balanceOf(from);
+    mathint ATokenInternalBalanceTO_ = internalBalanceOf(to);
+    mathint ATokenScaledBalanceTO_ = scaledBalanceOf(to);
+    mathint ATokenBalanceTO_ = balanceOf(to);
+    mathint ATokenInternalTotalSupply_ = internalTotalSupply();
+    mathint ATokenScaledTotalSupply_ = scaledTotalSupply();
+    mathint ATokenTotalSupply_ = totalSupply();
+    
+
+    assert _ATokenInternalBalanceFROM == ATokenInternalBalanceFROM_;
+    assert _ATokenScaledBalanceFROM == ATokenScaledBalanceFROM_;
+    assert _ATokenBalanceFROM == ATokenBalanceFROM_;
+
+    assert _ATokenInternalBalanceTO == ATokenInternalBalanceTO_;
+    assert _ATokenScaledBalanceTO == ATokenScaledBalanceTO_;
+    assert _ATokenBalanceTO == ATokenBalanceTO_;
+
+    assert _ATokenInternalTotalSupply == ATokenInternalTotalSupply_;
+    assert _ATokenScaledTotalSupply == ATokenScaledTotalSupply_;
+    assert _ATokenTotalSupply == ATokenTotalSupply_;
+}
+
+rule BurnExceedingBalance(address user, address receiver, uint256 amount, uint256 index) {
+	env e;
+
+    mathint _ATokenInternalBalance = internalBalanceOf(user);
+    mathint _ATokenScaledBalance = scaledBalanceOf(user);
+    mathint _ATokenBalance = balanceOf(user);
+    mathint _ATokenInternalTotalSupply = internalTotalSupply();
+    mathint _ATokenScaledTotalSupply = scaledTotalSupply();
+    mathint _ATokenTotalSupply = totalSupply();
+    mathint _underlyingReciverBalance = UNDERLYING_ASSET.balanceOf(receiver);
+    
+    require amount > _ATokenBalance;
+    burn@withrevert(e, user, receiver, amount, index);
+    
+    mathint ATokenInternalBalance_ = internalBalanceOf(user);
+    mathint ATokenScaledBalance_ = scaledBalanceOf(user);
+    mathint ATokenBalance_ = balanceOf(user);
+    mathint ATokenInternalTotalSupply_ = internalTotalSupply();
+    mathint ATokenScaledTotalSupply_ = scaledTotalSupply();
+    mathint ATokenTotalSupply_ = totalSupply();
+    mathint underlyingReciverBalance_ = UNDERLYING_ASSET.balanceOf(receiver);
+    
+    
+    assert _ATokenInternalBalance == ATokenInternalBalance_;
+    assert _ATokenScaledBalance == ATokenScaledBalance_;
+    assert _ATokenBalance == ATokenBalance_;
+    assert _ATokenInternalTotalSupply == ATokenInternalTotalSupply_;
+    assert _ATokenScaledTotalSupply == ATokenScaledTotalSupply_;
+    assert _ATokenTotalSupply == ATokenTotalSupply_;
+    
+    assert _underlyingReciverBalance == underlyingReciverBalance_;
+}
+
+ rule checkingBalanceOfFunctionLimits(address user){
+	env e; method f; calldataarg args;
+	// f(e, args);
+	
+    mathint _Balance = balanceOf(user);
+    mathint _ScaledBalance = scaledBalanceOf(user);
+    mathint _InternalBalance = internalBalanceOf(user);
+    mathint _Supply = totalSupply();
+
+    assert _Balance <= max_uint, "Checking if Balanceof is within limits";
+    assert _Balance <= _Supply, "Checking if Balanceof is less than supply";
+    assert _ScaledBalance <= _Balance, "Checking if Balanceof is greater than scaled balance";
+    assert _InternalBalance <= _Balance, "Checking if Balanceof is greater than internal balance";
+
+}
+
+
+ rule checkingscaledBalanceOfFunctionLimits(address user){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _Balance = scaledBalanceOf(user);
+    mathint _scaledTotalSupply = scaledTotalSupply();
+
+    assert _Balance <= max_uint, "Checking if scaledBalanceOf is within limits";
+    assert _Balance <= _scaledTotalSupply, "Checking if scaledBalanceOf is less than scaledTotalSupply";
+
+}
+
+
+ rule checkinginternalBalanceOfFunctionLimits(address user){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _Balance = internalBalanceOf(user);
+    mathint _InternalTotalSupply = internalTotalSupply();
+
+    assert _Balance <= max_uint, "Checking if internalBalanceOf is within limits";
+    assert _Balance <= _InternalTotalSupply, "Checking if internalBalanceOf is less than internalTotalSupply";
+
+}
+
+
+ rule checkinggetScaledUserBalanceAndSupplyFunctionLimits(address user){
+	env e; method f; calldataarg args;
+	// f(e, args);
+	mathint _Balance;
+    mathint _Supply;
+    _Balance, _Supply = getScaledUserBalanceAndSupply(user);
+
+    assert _Balance <= max_uint, "Checking if ScaledUserBalance is within limits";
+    assert _Supply <= max_uint, "Checking if ScaledSupply is within limits";
+    assert _Balance <= _Supply, "Checking if ScaledUserBalance is less than or equal to supply";
+
+}
+
+ rule checkingtotalSupplyFunctionLimits(address user, uint256 _rebasingIndex){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _scaledTotalSupply = scaledTotalSupply();
+    mathint _Supply = totalSupply();
+
+    if(_scaledTotalSupply == 0){
+        assert _Supply == 0, "Checking if the correct Total Supply is provided";
+    }
+    else{
+    assert _Supply <= max_uint, "Checking if Total Supply Function is within limits";
+    }
+}
+
+ rule checkingscaledTotalSupplyFunctionLimits(address user){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _scaledTotalSupply = scaledTotalSupply();
+
+    assert _scaledTotalSupply <= max_uint, "Checking if scaledTotalSupply is within limits";
+}
+
+ rule checkinginternalTotalSupplyFunctionLimits(address user){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _InternalTotalSupply = internalTotalSupply();
+
+    assert _InternalTotalSupply <= max_uint, "Checking if internalTotalSupply is within limits";
+}
+
+rule PermitFunctionOwnerNotAddress0(	address owner,
+    address spender,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s, method f) {
+
+    env e;
+
+    permit@withrevert(e, owner, spender, value, deadline, v, r, s);
+    assert owner == 0x0000000000000000000000000000000000000000 => lastReverted, "Permit function cannot have owner as Address(0)";
+}
+
+
+rule CheckPermitFunction(	address owner,
+    address spender,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s) {
+
+    env e;
+    require value != 0;
+
+    mathint _BeforeNonce = _getNonces(e, owner);
+    mathint _allowance = allowance(owner, spender);
+    
+    permit(e, owner, spender, value, deadline, v, r, s);
+
+    mathint _NonceAfter = _getNonces(e, owner);
+    mathint allowance_ = allowance(owner, spender);
+
+    assert _NonceAfter >  _BeforeNonce, "Nonce changes after Permit";
+    assert allowance_ >= _allowance, "Allowance increases";
+}
+
+
+rule checktransferFunction(address from, address to, uint256 amount, bool validate, method f) {
+
+    env e;
+
+    require amount != 0;
+
+    mathint _ATokenInternalBalanceFROM = internalBalanceOf(from);
+    mathint _ATokenScaledBalanceFROM = scaledBalanceOf(from);
+    mathint _ATokenBalanceFROM = balanceOf(from);
+    mathint _ATokenInternalBalanceTO = internalBalanceOf(to);
+    mathint _ATokenScaledBalanceTO = scaledBalanceOf(to);
+    mathint _ATokenBalanceTO = balanceOf(to);
+    mathint _ATokenInternalTotalSupply = internalTotalSupply();
+    mathint _ATokenScaledTotalSupply = scaledTotalSupply();
+    mathint _ATokenTotalSupply = totalSupply();
+    
+    _gettransfer(e, from, to, amount, validate);
+
+    mathint ATokenInternalBalanceFROM_ = internalBalanceOf(from);
+    mathint ATokenScaledBalanceFROM_ = scaledBalanceOf(from);
+    mathint ATokenBalanceFROM_ = balanceOf(from);
+    mathint ATokenInternalBalanceTO_ = internalBalanceOf(to);
+    mathint ATokenScaledBalanceTO_ = scaledBalanceOf(to);
+    mathint ATokenBalanceTO_ = balanceOf(to);
+    mathint ATokenInternalTotalSupply_ = internalTotalSupply();
+    mathint ATokenScaledTotalSupply_ = scaledTotalSupply();
+    mathint ATokenTotalSupply_ = totalSupply();
+    
+
+    assert _ATokenInternalBalanceFROM >= ATokenInternalBalanceFROM_;
+    assert _ATokenScaledBalanceFROM >= ATokenScaledBalanceFROM_;
+    assert _ATokenBalanceFROM >= ATokenBalanceFROM_;
+
+    assert _ATokenInternalBalanceTO <= ATokenInternalBalanceTO_;
+    assert _ATokenScaledBalanceTO <= ATokenScaledBalanceTO_;
+    assert _ATokenBalanceTO <= ATokenBalanceTO_;
+
+    assert _ATokenInternalTotalSupply == ATokenInternalTotalSupply_;
+    assert _ATokenScaledTotalSupply == ATokenScaledTotalSupply_;
+    assert _ATokenTotalSupply == ATokenTotalSupply_;
+
+}
+
+rule checktransferFunction2(address from, address to, uint256 amount, method f) {
+
+    env e;
+
+    require amount != 0;
+
+    mathint _ATokenInternalBalanceFROM = internalBalanceOf(from);
+    mathint _ATokenScaledBalanceFROM = scaledBalanceOf(from);
+    mathint _ATokenBalanceFROM = balanceOf(from);
+    mathint _ATokenInternalBalanceTO = internalBalanceOf(to);
+    mathint _ATokenScaledBalanceTO = scaledBalanceOf(to);
+    mathint _ATokenBalanceTO = balanceOf(to);
+    mathint _ATokenInternalTotalSupply = internalTotalSupply();
+    mathint _ATokenScaledTotalSupply = scaledTotalSupply();
+    mathint _ATokenTotalSupply = totalSupply();
+    
+    _gettransfer2(e, from, to, amount);
+
+    mathint ATokenInternalBalanceFROM_ = internalBalanceOf(from);
+    mathint ATokenScaledBalanceFROM_ = scaledBalanceOf(from);
+    mathint ATokenBalanceFROM_ = balanceOf(from);
+    mathint ATokenInternalBalanceTO_ = internalBalanceOf(to);
+    mathint ATokenScaledBalanceTO_ = scaledBalanceOf(to);
+    mathint ATokenBalanceTO_ = balanceOf(to);
+    mathint ATokenInternalTotalSupply_ = internalTotalSupply();
+    mathint ATokenScaledTotalSupply_ = scaledTotalSupply();
+    mathint ATokenTotalSupply_ = totalSupply();
+    
+
+    assert _ATokenInternalBalanceFROM >= ATokenInternalBalanceFROM_;
+    assert _ATokenScaledBalanceFROM >= ATokenScaledBalanceFROM_;
+    assert _ATokenBalanceFROM >= ATokenBalanceFROM_;
+
+    assert _ATokenInternalBalanceTO <= ATokenInternalBalanceTO_;
+    assert _ATokenScaledBalanceTO <= ATokenScaledBalanceTO_;
+    assert _ATokenBalanceTO <= ATokenBalanceTO_;
+
+    assert _ATokenInternalTotalSupply == ATokenInternalTotalSupply_;
+    assert _ATokenScaledTotalSupply == ATokenScaledTotalSupply_;
+    assert _ATokenTotalSupply == ATokenTotalSupply_;
+
+}
+
+ rule checkingscaledBalanceOfFunctionLimits2(address user, uint256 rebasingIndex){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _Balance = _getscaledBalanceOf(e, user, rebasingIndex);
+    mathint _ScaledTotalSupply = _getscaledTotalSupply(e, rebasingIndex);
+
+    assert _Balance <= max_uint, "Checking if scaledBalanceOf is within limits";
+    assert _Balance <= _ScaledTotalSupply, "Checking if _scaledBalanceOf is less than scaledTotalSupply";
+}
+
+
+ rule checkingstEthRebasingIndexFunctionLimits(){
+	env e; method f; calldataarg args;
+	f(e, args);
+	
+    mathint _Index = _getstEthRebasingIndex(e);
+
+    assert _Index <= max_uint, "Checking if stEthRebasingIndex is within limits";
 }
