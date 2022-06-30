@@ -17,4 +17,4 @@ coverage
 .coverage_contracts
 .certora_config
 .last_confs
-.cer
+.certora*
