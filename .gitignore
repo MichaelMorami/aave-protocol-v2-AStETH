@@ -15,3 +15,6 @@ coverage
 .coverage_artifacts
 .coverage_cache
 .coverage_contracts
+.certora_config
+.last_confs
+.certora*
