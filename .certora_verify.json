@@ -1,0 +1,16 @@
+[
+    {
+        "importFilesToOrigRelpaths": {
+            ".certora_config/0_AStETH_summerizations.spec.spec": "certora/specs/AStETH_summerizations.spec"
+        },
+        "primary_contract": "AStETHHarness",
+        "specfile": ".certora_config/0_AStETH.spec.spec",
+        "specfileOrigRelpath": "certora/specs/AStETH.spec",
+        "specfilesToImportDecls": {
+            ".certora_config/0_AStETH.spec.spec": [
+                "./AStETH_summerizations.spec"
+            ]
+        },
+        "type": "spec"
+    }
+]
