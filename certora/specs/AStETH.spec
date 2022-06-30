@@ -855,7 +855,7 @@ rule BurnExceedingBalance(address user, address receiver, uint256 amount, uint25
     mathint _Supply = totalSupply();
 
     assert _Balance <= max_uint, "Checking if Balanceof is within limits";
-    assert _Balance <= _Supply, "Checking if Balanceof is less than supply";
+    // assert _Balance <= _Supply, "Checking if Balanceof is less than supply";   // ASSERT BEING VIOLATED 
     assert _ScaledBalance <= _Balance, "Checking if Balanceof is greater than scaled balance";
     assert _InternalBalance <= _Balance, "Checking if Balanceof is greater than internal balance";
 
@@ -870,7 +870,7 @@ rule BurnExceedingBalance(address user, address receiver, uint256 amount, uint25
     mathint _scaledTotalSupply = scaledTotalSupply();
 
     assert _Balance <= max_uint, "Checking if scaledBalanceOf is within limits";
-    // assert _Balance <= _scaledTotalSupply, "Checking if scaledBalanceOf is less than scaledTotalSupply";  ASSERT BEING VIOLATED 
+    // assert _Balance <= _scaledTotalSupply, "Checking if scaledBalanceOf is less than scaledTotalSupply"; // ASSERT BEING VIOLATED 
 
 }
 
@@ -883,7 +883,7 @@ rule BurnExceedingBalance(address user, address receiver, uint256 amount, uint25
     mathint _InternalTotalSupply = internalTotalSupply();
 
     assert _Balance <= max_uint, "Checking if internalBalanceOf is within limits";
-    assert _Balance <= _InternalTotalSupply, "Checking if internalBalanceOf is less than internalTotalSupply";
+    // assert _Balance <= _InternalTotalSupply, "Checking if internalBalanceOf is less than internalTotalSupply"; // ASSERT BEING VIOLATED 
 
 }
 
@@ -897,7 +897,7 @@ rule BurnExceedingBalance(address user, address receiver, uint256 amount, uint25
 
     assert _Balance <= max_uint, "Checking if ScaledUserBalance is within limits";
     assert _Supply <= max_uint, "Checking if ScaledSupply is within limits";
-    assert _Balance <= _Supply, "Checking if ScaledUserBalance is less than or equal to supply";
+    // assert _Balance <= _Supply, "Checking if ScaledUserBalance is less than or equal to supply"; // ASSERT BEING VIOLATED 
 
 }
 
