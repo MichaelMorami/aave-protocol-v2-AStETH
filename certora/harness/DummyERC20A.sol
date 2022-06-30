@@ -8,3 +8,4 @@ contract DummyERC20A is DummyERC20Impl {
         return 1000000000000000000000000000; // = one RAY
     }
 }
+

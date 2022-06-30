@@ -72,10 +72,9 @@ contract AStETHHarness is AStETH {
     return _scaledBalanceOf(user, rebasingIndex);
   }
 
-
    function _getstEthRebasingIndex() public returns (uint256){
     return _stEthRebasingIndex();
   }
-
+  
   
 }
