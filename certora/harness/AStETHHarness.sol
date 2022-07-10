@@ -21,5 +21,9 @@ contract AStETHHarness is AStETH {
       return true;
   }
 
+  function getNonceOf(address owner) public view returns(uint256) {
+    return _nonces[owner];
+  }
+
   
 }

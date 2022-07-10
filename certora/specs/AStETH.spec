@@ -8,6 +8,7 @@ methods {
 
     getRevision() returns (uint256)
     initialize(uint8, string, string) envfree
+    initializing() returns(bool) envfree
     balanceOf(address) returns (uint256) envfree
     scaledBalanceOf(address) returns (uint256) envfree
     internalBalanceOf(address) returns (uint256) envfree
@@ -15,6 +16,8 @@ methods {
     totalSupply() returns (uint256) envfree
     scaledTotalSupply() returns (uint256) envfree
     internalTotalSupply() returns (uint256) envfree
+    getNonceOf(address) returns (uint256) envfree
+    allowance(address, address) returns(uint256) envfree
     burn(address, address,uint256, uint256)
     mint(address, uint256, uint256)
     mintToTreasury(uint256, uint256)
@@ -29,6 +32,972 @@ methods {
 
     LENDING_POOL.aToken() returns (address) envfree
 
+}
+
+// aToken is reserve token
+
+invariant totalSupply_equals_sumOfAllBalances() 
+ 	totalSupply() == totalsGhost()
+
+
+rule burnReducesTotalSupplyOfATokens(
+    address user, 
+    address receiverOfUnderlying, 
+    uint256 amount,
+    uint256 index,
+    uint256 stEthRebasingIndex,
+    uint256 aaveLiquidityIndex
+    ) {
+        env e;
+        mathint amountScaled = returnAmount(amount, stEthRebasingIndex, aaveLiquidityIndex);
+        mathint totalSupplyBefore = totalSupply();
+        burn(e, user, receiverOfUnderlying, amount, index);
+        mathint totalSupplyAfter = totalSupply();
+        assert amount > 0 => totalSupplyBefore > totalSupplyAfter;
+        assert amount == 0 => totalSupplyBefore == totalSupplyAfter;
+        assert totalSupplyAfter == totalSupplyBefore - amountScaled;
+    }
+
+
+
+rule burnReducesBalanceOfATokensOfUser(
+    address user, 
+    address receiverOfUnderlying, 
+    uint256 amount,
+    uint256 index,
+    uint256 stEthRebasingIndex,
+    uint256 aaveLiquidityIndex
+    ) {
+        env e;
+        mathint amountScaled = returnAmount(amount, stEthRebasingIndex, aaveLiquidityIndex);
+        mathint balanceBefore = balanceOf(user);
+        burn(e, user, receiverOfUnderlying, amount, index);
+        mathint balanceAfter = balanceOf(user);
+        assert amount > 0 => balanceBefore > balanceAfter;
+        assert amount == 0 => balanceBefore == balanceAfter;
+        assert balanceAfter == balanceBefore - amountScaled;
+    }
+
+
+rule burnCanOnlyBeCalledByLendingPool(
+    address user, 
+    address receiverOfUnderlying, 
+    uint256 amount,
+    uint256 index
+) {
+        env e;
+        require e.msg.sender != LENDING_POOL;
+        burn@withrevert(e, user, receiverOfUnderlying, amount, index);
+        assert lastReverted;
+}
+
+
+rule burnIncreasesTheBalanceOfUnderlyingTokenOfUnderlyingAddress(
+    address user, 
+    address receiverOfUnderlying, 
+    uint256 amount,
+    uint256 index
+) {
+        env e;
+        mathint underlyingTokenBalanceBefore = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying);
+        burn(e, user, receiverOfUnderlying, amount, index);
+        mathint underlyingTokenBalanceAfter = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying);
+        assert amount > 0 && receiverOfUnderlying!=currentContract => underlyingTokenBalanceBefore < underlyingTokenBalanceAfter;
+        assert amount == 0 => underlyingTokenBalanceBefore == underlyingTokenBalanceAfter;
+        assert receiverOfUnderlying!=currentContract  => underlyingTokenBalanceAfter == underlyingTokenBalanceBefore + amount;
+}
+
+rule burnHoldsAdditivePropertyForDifferentAmountForATokens(
+    address user,
+    address receiverOfUnderlying,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    burn(e, user, receiverOfUnderlying, amount1, index);
+    burn(e, user, receiverOfUnderlying, amount2, index);
+    mathint balanceAfterSeparateBurn = balanceOf(user);
+    mathint totalSupplyAfterSeparateBurn = totalSupply();
+    burn(e, user, receiverOfUnderlying, amount1 + amount2, index) at initialState;
+    mathint balanceAfterCombinedBurn = balanceOf(user);
+    mathint totalSupplyAfterCombinedBurn = totalSupply();
+    assert balanceAfterSeparateBurn == balanceAfterCombinedBurn;
+    assert totalSupplyAfterCombinedBurn == totalSupplyAfterSeparateBurn;
+
+}
+
+rule burnHoldsAdditivePropertyForDifferentAmountForUnderlyingTokens(
+    address user,
+    address receiverOfUnderlying,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    burn(e, user, receiverOfUnderlying, amount1, index);
+    burn(e, user, receiverOfUnderlying, amount2, index);
+    mathint balanceOfUnderlyingTokenAfterSeparateBurn = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying);
+    burn(e, user, receiverOfUnderlying, amount1 + amount2, index) at initialState;
+    mathint balanceOfUnderlyingTokenAfterCombinedBurn = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying);
+   assert balanceOfUnderlyingTokenAfterSeparateBurn == balanceOfUnderlyingTokenAfterCombinedBurn;
+}
+
+rule burnSatisfiesCommuntativeProperty(
+    address user1,
+    address receiverOfUnderlying1,
+    address user2,
+    address user3,
+    address receiverOfUnderlying2,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    burn(e, user1, receiverOfUnderlying1, amount1, index);
+    burn(e, user2, receiverOfUnderlying2, amount2, index);
+    mathint totalSupplyBefore = totalSupply();
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(user3);
+    mathint underlyingTokenBalanceOfRandomUserBefore = UNDERLYING_ASSET.balanceOf(user3);
+    burn(e, user2, receiverOfUnderlying2, amount2, index) at initialState;
+    burn(e, user1, receiverOfUnderlying1, amount1, index);
+    mathint totalSupplyAfter = totalSupply();
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(user3);
+    mathint underlyingTokenBalanceOfRandomUserAfter = UNDERLYING_ASSET.balanceOf(user3);
+    assert totalSupplyBefore == totalSupplyAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+    assert underlyingTokenBalanceOfRandomUserBefore == underlyingTokenBalanceOfRandomUserAfter;
+}
+
+rule orderOfBurnDoesNotMatter(
+    address user1,
+    address receiverOfUnderlying1,
+    address user2,
+    address receiverOfUnderlying2,
+    address user3,
+    address receiverOfUnderlying3,
+    address user4,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 amount3,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    burn(e, user1, receiverOfUnderlying1, amount1, index);
+    burn(e, user2, receiverOfUnderlying2, amount2, index);
+    burn(e, user3, receiverOfUnderlying3, amount3, index);
+    mathint totalSupplyBefore = totalSupply();
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(user4);
+    mathint underlyingTokenBalanceOfRandomUserBefore = UNDERLYING_ASSET.balanceOf(user4);
+    burn(e, user2, receiverOfUnderlying2, amount2, index) at initialState;
+    burn(e, user3, receiverOfUnderlying3, amount3, index);
+    burn(e, user1, receiverOfUnderlying1, amount1, index);
+    mathint totalSupplyAfter = totalSupply();
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(user4);
+    mathint underlyingTokenBalanceOfRandomUserAfter = UNDERLYING_ASSET.balanceOf(user4);
+    assert totalSupplyBefore == totalSupplyAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+    assert underlyingTokenBalanceOfRandomUserBefore == underlyingTokenBalanceOfRandomUserAfter;
+}
+
+rule burnFromOneUserDoesNotAffectOtherUsers(
+    address user1,
+    address receiverOfUnderlying1,
+    address user2,
+    address receiverOfUnderlying2,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint balanceOfATokensOfNonInteractingUserBefore = balanceOf(user1);
+    mathint balanceOfUnderlyingTokenOfNonInteractingUserBefore = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying1);
+    burn(e, user2, receiverOfUnderlying2, amount, index);
+    mathint balanceOfATokensOfNonInteractingUserAfter = balanceOf(user1);
+    mathint balanceOfUnderlyingTokenOfNonInteractingUserAfter = UNDERLYING_ASSET.balanceOf(receiverOfUnderlying1);
+    assert user1 != user2 => balanceOfATokensOfNonInteractingUserBefore == balanceOfATokensOfNonInteractingUserAfter;
+    assert receiverOfUnderlying1 != receiverOfUnderlying2 && receiverOfUnderlying1 != currentContract => balanceOfUnderlyingTokenOfNonInteractingUserBefore == balanceOfUnderlyingTokenOfNonInteractingUserAfter;
+}
+
+
+
+rule mintCanOnlyBeCalledByLendingPool(
+    address user,
+    uint256 amount,
+    uint256 index
+) {
+        env e;
+        require e.msg.sender != LENDING_POOL;
+        mint@withrevert(e, user, amount, index);
+        assert lastReverted;
+}
+
+rule mintIncreasesBalanceOfATokesOfUser(
+    address user,
+    uint256 amount,
+    uint256 index,
+    uint256 stEthRebasingIndex,
+    uint256 aaveLiquidityIndex
+) {
+    env e;
+    mathint aTokenBalanceBefore = balanceOf(user);
+    mint(e, user, amount, index);
+    mathint scaledAmount = returnAmount(amount, stEthRebasingIndex, aaveLiquidityIndex);
+    mathint aTokenBalanceAfter = balanceOf(user);
+    assert aTokenBalanceAfter > aTokenBalanceBefore;
+    assert aTokenBalanceAfter == aTokenBalanceBefore + scaledAmount;
+}
+
+rule mintIncreasesTotalSupplyOfATokens(
+    address user,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint totalSupplyBefore = totalSupply();
+    mint(e, user, amount, index);
+    mathint totalSupplyAfter = totalSupply();
+    assert totalSupplyAfter > totalSupplyBefore;
+}
+
+rule mintPreservesTheTotalSupplyOfUnderlyingAsset(
+    address user,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint totalSupplyOfUnderlyingAssetBefore = UNDERLYING_ASSET.totalSupply();
+    mint(e, user, amount, index);
+    mathint totalSupplyOfUnderlyingAssetAfter = UNDERLYING_ASSET.totalSupply();
+    assert totalSupplyOfUnderlyingAssetAfter == totalSupplyOfUnderlyingAssetBefore;
+}
+
+rule mintPreservesTheBalanceOfUnderlyingAssetOfEachUser(
+    address user,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint balanceOfUnderlyingAssetBefore = UNDERLYING_ASSET.balanceOf(user);
+    mint(e, user, amount, index);
+    mathint balanceOfUnderlyingAssetAfter = UNDERLYING_ASSET.balanceOf(user);
+    assert balanceOfUnderlyingAssetBefore == balanceOfUnderlyingAssetAfter;
+}
+
+rule mintHoldsAdditivePropertyForSeparateAmountForATokens(
+    address user,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mint(e, user, amount1, index);
+    mint(e, user, amount2, index);
+    mathint balanceAfterSeparateMint = balanceOf(user);
+    mathint totalSupplyAfterSeparateMint = totalSupply();
+    mint(e, user, amount1 + amount2, index) at initialState;
+    mathint balanceAfterCombinedMint = balanceOf(user);
+    mathint totalSupplyAfterCombinedMint = totalSupply();
+    assert balanceAfterSeparateMint == balanceAfterCombinedMint;
+    assert totalSupplyAfterSeparateMint == totalSupplyAfterCombinedMint;
+
+}
+
+rule mintHoldsAdditivePropertyForDifferentAmountForUnderlyingTokens(
+    address user,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mint(e, user, amount1, index);
+    mint(e, user, amount2, index);
+    mathint balanceOfUnderlyingTokenAfterSeparateMint = UNDERLYING_ASSET.balanceOf(user);
+    mint(e, user, amount1 + amount2, index) at initialState;
+    mathint balanceOfUnderlyingTokenAfterCombinedMint = UNDERLYING_ASSET.balanceOf(user);
+   assert balanceOfUnderlyingTokenAfterSeparateMint == balanceOfUnderlyingTokenAfterCombinedMint;
+}
+
+rule mintFromOneUserDoesNotAffectOtherUsers(
+    address user1,
+    address user2,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint balanceOfATokensOfNonInteractingUserBefore = balanceOf(user1);
+    mathint balanceOfUnderlyingTokenOfNonInteractingUserBefore = UNDERLYING_ASSET.balanceOf(user1);
+    mint(e, user2, amount, index);
+    mathint balanceOfATokensOfNonInteractingUserAfter = balanceOf(user1);
+    mathint balanceOfUnderlyingTokenOfNonInteractingUserAfter = UNDERLYING_ASSET.balanceOf(user1);
+    assert user1 != user2 => balanceOfATokensOfNonInteractingUserBefore == balanceOfATokensOfNonInteractingUserAfter;
+    assert user1 != user2 => balanceOfUnderlyingTokenOfNonInteractingUserBefore == balanceOfUnderlyingTokenOfNonInteractingUserAfter;
+
+}
+
+rule mintSatisfiesCommutativeProperty(
+    address user1,
+    address user2,
+    address user3,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mint(e, user1, amount1, index);
+    mint(e, user2, amount2, index);
+    mathint totalSupplyBefore = totalSupply();
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(user3);
+    mathint underlyingTokenBalanceOfRandomUserBefore = UNDERLYING_ASSET.balanceOf(user3);
+    mint(e, user2, amount2, index) at initialState;
+    mint(e, user1, amount1, index);
+    mathint totalSupplyAfter = totalSupply();
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(user3);
+    mathint underlyingTokenBalanceOfRandomUserAfter = UNDERLYING_ASSET.balanceOf(user3);
+    assert totalSupplyBefore == totalSupplyAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+    assert underlyingTokenBalanceOfRandomUserBefore == underlyingTokenBalanceOfRandomUserAfter;
+}
+
+rule orderOfMintDoesNotMatter(
+    address user1,
+    address user2,
+    address user3,
+    address user4,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 amount3,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mint(e, user1, amount1, index);
+    mint(e, user2, amount2, index);
+    mint(e, user3, amount3, index);
+    mathint totalSupplyBefore = totalSupply();
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(user4);
+    mathint underlyingTokenBalanceOfRandomUserBefore = UNDERLYING_ASSET.balanceOf(user4);
+    mint(e, user2, amount2, index) at initialState;
+    mint(e, user1, amount1, index);
+    mint(e, user3, amount3, index);
+    mathint totalSupplyAfter = totalSupply();
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(user4);
+    mathint underlyingTokenBalanceOfRandomUserAfter = UNDERLYING_ASSET.balanceOf(user4);
+    assert totalSupplyBefore == totalSupplyAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+    assert underlyingTokenBalanceOfRandomUserBefore == underlyingTokenBalanceOfRandomUserAfter;
+}
+
+
+rule integrityOfBalanceOfATokenOfUsers(
+    method f,
+    address userA,
+    address userB
+) {
+    env e;
+    mathint balanceOfUserABefore = balanceOf(userA);
+    mathint balanceOfUserBBefore = balanceOf(userB);
+
+    calldataarg args;
+    f(e, args);
+
+    mathint balanceOfUserAAfter = balanceOf(userA);
+    mathint balanceOfUserBAfter = balanceOf(userB);
+
+    assert userA != userB => 
+    (balanceOfUserABefore == balanceOfUserAAfter) 
+    || (balanceOfUserBBefore == balanceOfUserBAfter) 
+    || (balanceOfUserABefore != balanceOfUserAAfter && balanceOfUserBBefore != balanceOfUserBAfter && balanceOfUserABefore + balanceOfUserBBefore == balanceOfUserAAfter + balanceOfUserBAfter);
+
+}
+
+rule balanceOfATokenOfUserChangesInProportionToTotalSupply(
+    address user,
+    method f
+) {
+    env e;
+
+     require f.selector == burn(address, address, uint256, uint256).selector 
+            || f.selector == mint(address, uint256, uint256).selector;
+
+    mathint balanceBefore = balanceOf(user);
+    mathint totalSupplyBefore = totalSupply();
+    
+    calldataarg args;
+    f(e, args);  
+
+    mathint balanceAfter = balanceOf(user);
+    mathint totalSupplyAfter = totalSupply();
+
+    //to check that mint and burn is done to balance of user 
+    assert balanceBefore != balanceAfter => balanceAfter - balanceBefore == totalSupplyAfter - totalSupplyBefore;
+}
+
+rule canOnlyBeInitializedOnce(
+    uint8 underlyingAssetDecimals,
+    string tokenName,
+    string tokenSymbol
+) {
+    require initializing() == false;
+    initialize(underlyingAssetDecimals, tokenName, tokenSymbol);
+    storage state = lastStorage;
+    initialize@withrevert(underlyingAssetDecimals, tokenName, tokenSymbol) at state;
+
+    assert lastReverted;
+}
+
+rule mintToTreasuryCanOnlyBeCalledByLendingPool(
+    uint256 amount,
+    uint256 index
+) {
+        env e;
+        require e.msg.sender != LENDING_POOL;
+        mintToTreasury@withrevert(e, amount, index);
+        assert lastReverted;
+}
+
+rule mintToTreasuryIsSubsetOfMint(
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    address user = RESERVE_TREASURY;
+    mintToTreasury(e, amount, index);
+    mathint balanceBefore = balanceOf(user);
+    mathint totalSupplyBefore = totalSupply();
+
+    mint(e, user, amount, index) at initialState;
+    mathint balanceAfter = balanceOf(user);
+    mathint totalSupplyAfter = totalSupply();
+
+    assert balanceBefore == balanceAfter;
+    assert totalSupplyBefore == totalSupplyAfter;
+}
+
+rule mintToTreasuryIncreasesBalanceOfATokesOfReserveTreasuryAddress(
+    uint256 amount,
+    uint256 index,
+    uint256 stEthRebasingIndex,
+    uint256 aaveLiquidityIndex
+) {
+    env e;
+    require amount != 0;
+    mathint aTokenBalanceOfReserveBefore = balanceOf(RESERVE_TREASURY);
+    mintToTreasury(e, amount, index);
+    mathint scaledAmount = returnAmount(amount, stEthRebasingIndex, aaveLiquidityIndex);
+    mathint aTokenBalanceOfReserveAfter = balanceOf(RESERVE_TREASURY);
+    assert aTokenBalanceOfReserveAfter > aTokenBalanceOfReserveBefore;
+    assert aTokenBalanceOfReserveAfter == aTokenBalanceOfReserveBefore + scaledAmount;
+}
+
+rule mintToTreasuryIncreasesTotalSupplyOfATokens(
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    require amount != 0;
+    mathint totalSupplyBefore = totalSupply();
+    mintToTreasury(e, amount, index);
+    mathint totalSupplyAfter = totalSupply();
+    assert totalSupplyAfter > totalSupplyBefore;
+}
+
+rule mintToTreasuryPreservesTheTotalSupplyOfUnderlyingAsset(
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint totalSupplyOfUnderlyingAssetBefore = UNDERLYING_ASSET.totalSupply();
+    mintToTreasury(e, amount, index);
+    mathint totalSupplyOfUnderlyingAssetAfter = UNDERLYING_ASSET.totalSupply();
+    assert totalSupplyOfUnderlyingAssetAfter == totalSupplyOfUnderlyingAssetBefore;
+}
+
+rule mintToTreasuryPreservesTheBalanceOfUnderlyingAssetOfEachUser(
+    address user,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint balanceOfUnderlyingAssetBefore = UNDERLYING_ASSET.balanceOf(user);
+    mintToTreasury(e, amount, index);
+    mathint balanceOfUnderlyingAssetAfter = UNDERLYING_ASSET.balanceOf(user);
+    assert balanceOfUnderlyingAssetBefore == balanceOfUnderlyingAssetAfter;
+}
+
+rule mintToTreasuryHoldsAdditivePropertyForSeparateAmountForATokens(
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mintToTreasury(e, amount1, index);
+    mintToTreasury(e, amount2, index);
+    mathint balanceAfterSeparateMint = balanceOf(RESERVE_TREASURY);
+    mathint totalSupplyAfterSeparateMint = totalSupply();
+    mintToTreasury(e, amount1 + amount2, index) at initialState;
+    mathint balanceAfterCombinedMint = balanceOf(RESERVE_TREASURY);
+    mathint totalSupplyAfterCombinedMint = totalSupply();
+    assert balanceAfterSeparateMint == balanceAfterCombinedMint;
+    assert totalSupplyAfterSeparateMint == totalSupplyAfterCombinedMint;
+}
+
+rule mintToTreasuryHoldsAdditivePropertyForDifferentAmountForUnderlyingTokens(
+    address user,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mintToTreasury(e, amount1, index);
+    mintToTreasury(e, amount2, index);
+    mathint balanceOfUnderlyingTokenAfterSeparateMint = UNDERLYING_ASSET.balanceOf(user);
+    mintToTreasury(e, amount1 + amount2, index) at initialState;
+    mathint balanceOfUnderlyingTokenAfterCombinedMint = UNDERLYING_ASSET.balanceOf(user);
+   assert balanceOfUnderlyingTokenAfterSeparateMint == balanceOfUnderlyingTokenAfterCombinedMint;
+}
+
+rule mintToTreasuryDoesNotAffectOtherUsers(
+    address user1,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint balanceOfATokensOfNonInteractingUserBefore = balanceOf(user1);
+    mathint balanceOfUnderlyingTokenOfNonInteractingUserBefore = UNDERLYING_ASSET.balanceOf(user1);
+    mintToTreasury(e, amount, index);
+    mathint balanceOfATokensOfNonInteractingUserAfter = balanceOf(user1);
+    mathint balanceOfUnderlyingTokenOfNonInteractingUserAfter = UNDERLYING_ASSET.balanceOf(user1);
+    assert user1 != RESERVE_TREASURY => balanceOfATokensOfNonInteractingUserBefore == balanceOfATokensOfNonInteractingUserAfter;
+    assert user1 != RESERVE_TREASURY => balanceOfUnderlyingTokenOfNonInteractingUserBefore == balanceOfUnderlyingTokenOfNonInteractingUserAfter;
+
+}
+
+rule mintToTreasurySatisfiesCommutativeProperty(
+    address user1,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mintToTreasury(e, amount1, index);
+    mintToTreasury(e, amount2, index);
+    mathint totalSupplyBefore = totalSupply();
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(user1);
+    mathint underlyingTokenBalanceOfRandomUserBefore = UNDERLYING_ASSET.balanceOf(user1);
+    mintToTreasury(e, amount2, index) at initialState;
+    mintToTreasury(e, amount1, index);
+    mathint totalSupplyAfter = totalSupply();
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(user1);
+    mathint underlyingTokenBalanceOfRandomUserAfter = UNDERLYING_ASSET.balanceOf(user1);
+    assert totalSupplyBefore == totalSupplyAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+    assert underlyingTokenBalanceOfRandomUserBefore == underlyingTokenBalanceOfRandomUserAfter;
+}
+
+rule orderOfMintToTreasuryDoesNotMatter(
+    address user1,
+    uint256 amount1,
+    uint256 amount2,
+    uint256 amount3,
+    uint256 index
+) {
+    env e;
+    storage initialState = lastStorage;
+    mintToTreasury(e, amount1, index);
+    mintToTreasury(e, amount2, index);
+    mintToTreasury(e, amount3, index);
+    mathint totalSupplyBefore = totalSupply();
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(user1);
+    mathint underlyingTokenBalanceOfRandomUserBefore = UNDERLYING_ASSET.balanceOf(user1);
+    mintToTreasury(e, amount2, index) at initialState;
+    mintToTreasury(e, amount1, index);
+    mintToTreasury(e, amount3, index);
+    mathint totalSupplyAfter = totalSupply();
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(user1);
+    mathint underlyingTokenBalanceOfRandomUserAfter = UNDERLYING_ASSET.balanceOf(user1);
+    assert totalSupplyBefore == totalSupplyAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+    assert underlyingTokenBalanceOfRandomUserBefore == underlyingTokenBalanceOfRandomUserAfter;
+}
+
+rule burnAndMintAreInverseOfEachOther(
+    address user,
+    address receiverOfUnderlying,
+    uint256 amount,
+    uint256 index
+) {
+    env e;
+    mathint totalSupplyBefore = totalSupply();
+    mathint userBalanceBefore = balanceOf(user);
+    burn(e, user, receiverOfUnderlying, amount, index);
+    mint(e, user, amount, index);
+    mathint totalSupplyAfter = totalSupply();
+    mathint userBalanceAfter = balanceOf(user);
+    assert totalSupplyBefore == totalSupplyAfter;
+    assert userBalanceBefore == userBalanceAfter;
+}
+
+rule transferOnLiquidationCanOnlyBeCalledByLendingPool(
+    address from, 
+    address to, 
+    uint256 amount
+) {
+        env e;
+        require e.msg.sender != LENDING_POOL;
+        transferOnLiquidation@withrevert(e, from, to, amount);
+        assert lastReverted;
+}
+
+rule transferOnLiquidationPreservesTotalSupplyOfATokens(
+    address from,
+    address to,
+    uint256 amount
+) {
+    env e;
+    mathint totalSupplyBefore = totalSupply();
+    transferOnLiquidation(e, from, to, amount);
+    mathint totalSupplyAfter = totalSupply();
+    assert totalSupplyBefore == totalSupplyAfter;
+}
+
+rule transferOnLiquidationReducesBalanceOfSenderAndIncreasesBalanceOfReceiverForATokens(
+    address from,
+    address to,
+    uint256 amount
+) {
+    env e;
+    require from != to;
+    mathint balanceOfUserABefore = balanceOf(from);
+    mathint balanceOfUserBBefore = balanceOf(to);
+    transferOnLiquidation(e, from, to, amount);
+    mathint balanceOfUserAAfter = balanceOf(from);
+    mathint balanceOfUserBAfter = balanceOf(to);
+    assert amount == 0 => (balanceOfUserABefore == balanceOfUserAAfter) && (balanceOfUserBBefore == balanceOfUserBAfter); 
+    assert amount > 0 => balanceOfUserABefore > balanceOfUserAAfter && balanceOfUserBBefore < balanceOfUserBAfter;
+    assert amount > 0 => balanceOfUserABefore == balanceOfUserAAfter + amount;
+    assert amount > 0 => balanceOfUserBBefore + amount == balanceOfUserBAfter;
+}
+
+rule transferOnLiquidationDoesNotTakeFee(
+    address from,
+    address to,
+    uint256 amount
+) {
+    env e;
+    require from != to;
+    mathint balanceOfUserABefore = balanceOf(from);
+    mathint balanceOfUserBBefore = balanceOf(to);
+    transferOnLiquidation(e, from, to, amount);
+    mathint balanceOfUserAAfter = balanceOf(from);
+    mathint balanceOfUserBAfter = balanceOf(to);
+    assert balanceOfUserABefore + balanceOfUserBBefore == balanceOfUserAAfter + balanceOfUserBAfter;
+}
+
+rule transferOnLiquidationPreservesTotalSupplyOfUnderlyingToken(
+    address from,
+    address to,
+    uint256 amount
+) {
+    env e;
+    require from != to;
+    mathint totalSupplyBefore = UNDERLYING_ASSET.totalSupply();
+    transferOnLiquidation(e, from, to, amount);
+    mathint totalSupplyAfter = UNDERLYING_ASSET.totalSupply();
+    assert totalSupplyBefore == totalSupplyAfter;
+}
+
+rule transferOnLiquidationDoesNotAffectOtherUsers(
+    address from,
+    address to,
+    address otherUser,
+    uint256 amount
+) {
+    env e;
+    require from != to && from != otherUser && to != otherUser;
+    mathint balanceOfOtherUserBefore = balanceOf(otherUser);
+    transferOnLiquidation(e, from, to, amount);
+    mathint balanceOfOtherUserAfter = balanceOf(otherUser);
+    assert balanceOfOtherUserBefore == balanceOfOtherUserAfter;
+}
+
+rule transferOnLiquidationIsCommutative(
+    address userA,
+    address userB,
+    address userC,
+    address userD,
+    uint256 amount1,
+    uint256 amount2
+) {
+    env e;
+    storage initialState = lastStorage;
+    require userA != userB;
+    require userC != userD;
+    transferOnLiquidation(e, userA, userB, amount1);
+    transferOnLiquidation(e, userC, userD, amount2);
+    mathint balanceOfUserAInitial = balanceOf(userA);
+    mathint balanceOfUserBInitial = balanceOf(userB);
+    mathint balanceOfUserCInitial = balanceOf(userC);
+    mathint balanceOfUserDInitial = balanceOf(userD);
+
+    transferOnLiquidation(e, userC, userD, amount2) at initialState;
+    transferOnLiquidation(e, userA, userB, amount1);
+    mathint balanceOfUserAFinal = balanceOf(userA);
+    mathint balanceOfUserBFinal = balanceOf(userB);
+    mathint balanceOfUserCFinal = balanceOf(userC);
+    mathint balanceOfUserDFinal = balanceOf(userD);
+
+    assert balanceOfUserAInitial == balanceOfUserAFinal 
+            && balanceOfUserBInitial == balanceOfUserBFinal 
+            && balanceOfUserCInitial == balanceOfUserCFinal 
+            && balanceOfUserDInitial == balanceOfUserDFinal;
+}
+
+rule transferOnLiquidationIsAdditive(
+    address userA,
+    address userB,
+    uint256 amount1,
+    uint256 amount2
+) {
+    env e;
+    storage initialState = lastStorage;
+    require userA != userB;
+    transferOnLiquidation(e, userA, userB, amount1);
+    transferOnLiquidation(e, userA, userB, amount2);
+    mathint balanceOfUserAInitial = balanceOf(userA);
+    mathint balanceOfUserBInitial = balanceOf(userB);
+
+    transferOnLiquidation(e, userA, userB, amount1 + amount2) at initialState;
+    mathint balanceOfUserAFinal = balanceOf(userA);
+    mathint balanceOfUserBFinal = balanceOf(userB);
+
+    assert balanceOfUserAInitial == balanceOfUserAFinal 
+            && balanceOfUserBInitial == balanceOfUserBFinal;
+}
+
+rule permitIncreasesNonceOfOwner(
+    address owner,
+    address spender,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+) {
+    env e;
+    uint256 nonceBefore = getNonceOf(owner);
+    permit(e, owner, spender, value, deadline, v, r, s);
+    uint256 nonceAfter = getNonceOf(owner);
+    assert nonceAfter == nonceBefore + 1;
+}
+
+rule permitDoesNotChangeNonceOfOtherUser(
+    address owner,
+    address spender,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s,
+    address randomUser
+) {
+    env e;
+    require randomUser != owner;
+    uint256 nonceBefore = getNonceOf(randomUser);
+    permit(e, owner, spender, value, deadline, v, r, s);
+    uint256 nonceAfter = getNonceOf(randomUser);
+    assert nonceAfter == nonceBefore;
+}
+
+rule permitDoesNotChangeAllowanceOfOtherUser(
+    address owner,
+    address spender,
+    uint256 value,
+    uint256 deadline,
+    uint8 v,
+    bytes32 r,
+    bytes32 s,
+    address randomUser
+) {
+    env e;
+    require randomUser != spender;
+    uint256 allowanceBefore = allowance(owner, randomUser);
+    permit(e, owner, spender, value, deadline, v, r, s);
+    uint256 allowanceAfter = allowance(owner, randomUser);
+    assert allowanceBefore == allowanceAfter;
+}
+
+rule transferUnderlyingToCanOnlyBeCalledByLendingPool(
+    address target, 
+    uint256 amount
+) {
+        env e;
+        require e.msg.sender != LENDING_POOL;
+        transferUnderlyingTo@withrevert(e, target, amount);
+        assert lastReverted;
+}
+
+rule transferUnderlyingToTransferUnderlyingAssetToTarget(
+    address target,
+    uint256 amount
+) {
+    env e;
+    mathint underlyingTokenBalanceBefore = UNDERLYING_ASSET.balanceOf(target);
+    transferUnderlyingTo(e, target, amount);
+    mathint underlyingTokenBalanceAfter = UNDERLYING_ASSET.balanceOf(target);
+    assert target != currentContract => underlyingTokenBalanceAfter == underlyingTokenBalanceBefore + amount;
+    assert target == currentContract => underlyingTokenBalanceAfter == underlyingTokenBalanceBefore;
+}
+
+rule transferUnderlyingToDoesNotAffectTotalSupplyAndBalanceOfATokens(
+    address target,
+    uint256 amount,
+    address randomUser
+) {
+    env e;
+    mathint aTokensBefore = totalSupply();
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(randomUser);
+    transferUnderlyingTo(e, target, amount);
+    mathint aTokensAfter = totalSupply();
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(randomUser);
+    assert aTokensBefore == aTokensAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+}
+
+rule transferUnderlyingToIsCommutative(
+    address userA,
+    uint256 amountA, 
+    address userB,
+    uint256 amountB
+) {
+    env e;
+    storage initialState = lastStorage;
+    transferUnderlyingTo(e, userA, amountA);
+    transferUnderlyingTo(e, userB, amountB);
+    mathint initialBalanceOfUserA = UNDERLYING_ASSET.balanceOf(userA);
+    mathint initialBalanceOfUserB = UNDERLYING_ASSET.balanceOf(userB);
+    mathint totalSupplyBefore = UNDERLYING_ASSET.totalSupply();
+    transferUnderlyingTo(e, userB, amountB) at initialState;
+    transferUnderlyingTo(e, userA, amountA);
+    mathint finalBalanceOfUserA = UNDERLYING_ASSET.balanceOf(userA);
+    mathint finalBalanceOfUserB = UNDERLYING_ASSET.balanceOf(userB);
+    mathint totalSupplyAfter = UNDERLYING_ASSET.totalSupply();
+    assert initialBalanceOfUserA == finalBalanceOfUserA;
+    assert initialBalanceOfUserB == finalBalanceOfUserB;
+    assert totalSupplyBefore == totalSupplyAfter;
+
+}
+
+rule transferUnderlyingToDoesNotAffectOtherUser(
+    address userA,
+    uint256 amountA, 
+    address randomUser
+) {
+    env e;
+    require userA != randomUser && randomUser != currentContract;
+    mathint underlyingBalanceOfRandomUserBefore = UNDERLYING_ASSET.balanceOf(randomUser);
+    mathint aTokenbalanceOfRandomUserBefore = balanceOf(randomUser);
+    transferUnderlyingTo(e, userA, amountA);
+    mathint underlyingBalanceOfRandomUserAfter = UNDERLYING_ASSET.balanceOf(randomUser);
+    mathint aTokenbalanceOfRandomUserAfter = balanceOf(randomUser);
+    assert underlyingBalanceOfRandomUserBefore == underlyingBalanceOfRandomUserAfter;
+    assert aTokenbalanceOfRandomUserBefore == aTokenbalanceOfRandomUserAfter;
+}
+
+rule transferUnderlyingToIsAdditive(
+    address userA,
+    uint256 amountA,
+    uint256 amountB
+) {
+    env e;
+    storage initialState = lastStorage;
+    transferUnderlyingTo(e, userA, amountA);
+    transferUnderlyingTo(e, userA, amountB);
+    mathint initialUnderlyingBalanceOfUserA = UNDERLYING_ASSET.balanceOf(userA);
+    mathint initialATokenBalanceOfUserA = balanceOf(userA);
+    transferUnderlyingTo(e, userA, amountA + amountB) at initialState;
+    mathint finalUnderlyingBalanceOfUserA = UNDERLYING_ASSET.balanceOf(userA);
+    mathint finalATokenBalanceOfUserA = balanceOf(userA);
+    assert initialUnderlyingBalanceOfUserA == finalUnderlyingBalanceOfUserA;
+    assert initialATokenBalanceOfUserA == finalATokenBalanceOfUserA;
+}
+
+rule methodDoesNotChangeStateOfContract(
+    method f,
+    address user
+) filtered {
+    f -> f.selector == balanceOf(address).selector 
+        || f.selector == scaledBalanceOf(address).selector
+        || f.selector == internalBalanceOf(address).selector
+        || f.selector == getScaledUserBalanceAndSupply(address).selector
+        || f.selector == totalSupply().selector
+        || f.selector == scaledTotalSupply().selector
+        || f.selector == internalTotalSupply().selector
+} {
+    calldataarg args;
+    env e;
+    storage initialState = lastStorage;
+    mathint initialTotalSupplyOfATokens = totalSupply();
+    mathint initialTotalSupplyOfUnderlyingTokens = UNDERLYING_ASSET.totalSupply();
+    mathint initialBalanceOfATokenOfUser = balanceOf(user);
+    mathint initialBalanceOfUnderlyingTokenOfUser = UNDERLYING_ASSET.balanceOf(user);
+    mathint initialNonce = getNonceOf(user);
+
+    f(e, args);
+
+    mathint finalTotalSupplyOfATokens = totalSupply();
+    mathint finalTotalSupplyOfUnderlyingTokens = UNDERLYING_ASSET.totalSupply();
+    mathint finalBalanceOfATokenOfUser = balanceOf(user);
+    mathint finalBalanceOfUnderlyingTokenOfUser = UNDERLYING_ASSET.balanceOf(user);
+    mathint finalNonce = getNonceOf(user);
+
+    assert initialTotalSupplyOfATokens == finalTotalSupplyOfATokens;
+    assert initialTotalSupplyOfUnderlyingTokens == finalTotalSupplyOfUnderlyingTokens;
+    assert initialBalanceOfATokenOfUser == finalBalanceOfATokenOfUser;
+    assert initialBalanceOfUnderlyingTokenOfUser == finalBalanceOfUnderlyingTokenOfUser;
+    assert initialNonce == finalNonce;
+}
+
+rule balancesAndTotalSupplyAreProportional(address randomUser) {
+    mathint aTokenInternalTotalSupplyBefore = internalTotalSupply();
+    mathint aTokenScaledTokenSupplyBefore = scaledTotalSupply();
+    mathint aTokenTotalSupplyBefore = totalSupply();
+
+    mathint aTokenInternalBalanceBefore = internalBalanceOf(randomUser);
+    mathint aTokenScaledBalanceBefore = scaledBalanceOf(randomUser);
+    mathint aTokenBalanceOfUserBefore = balanceOf(randomUser);
+    
+    assert aTokenInternalBalanceBefore * aTokenScaledTokenSupplyBefore == aTokenScaledBalanceBefore * aTokenInternalTotalSupplyBefore;
+    assert aTokenScaledBalanceBefore * aTokenTotalSupplyBefore == aTokenBalanceOfUserBefore * aTokenScaledTokenSupplyBefore;
+    assert aTokenInternalBalanceBefore * aTokenTotalSupplyBefore == aTokenBalanceOfUserBefore * aTokenInternalTotalSupplyBefore;
+    
+    env e; 
+    calldataarg args; 
+    method f;
+    
+    f(e, args);
+
+    mathint aTokenInternalBalanceAfter = internalBalanceOf(randomUser);
+    mathint aTokenScaledBalanceAfter = scaledBalanceOf(randomUser);
+    mathint aTokenBalanceAfter = balanceOf(randomUser);
+
+    mathint aTokenInternalTotalSupplyAfter = internalTotalSupply();
+    mathint aTokenScaledTokenSupplyAfter = scaledTotalSupply();
+    mathint aTokenTotalSupplyAfter = totalSupply();
+
+    assert aTokenInternalBalanceAfter * aTokenScaledTokenSupplyAfter == aTokenScaledBalanceAfter * aTokenInternalTotalSupplyAfter;
+    assert aTokenScaledBalanceAfter * aTokenTotalSupplyAfter == aTokenBalanceAfter * aTokenScaledTokenSupplyAfter;
+    assert aTokenInternalBalanceAfter * aTokenTotalSupplyAfter == aTokenBalanceAfter * aTokenInternalTotalSupplyAfter;
 }
 
 /*
@@ -55,6 +1024,7 @@ methods {
     @Link:
 */
 
+/*
 rule integrityOfTransferUnderlyingTo(address user, uint256 amount) {
     env e;
     require user != currentContract;
@@ -98,6 +1068,7 @@ rule integrityOfTransferUnderlyingTo(address user, uint256 amount) {
     @Link:
 */
 
+/*
 rule monotonicityOfMint(address user, uint256 amount, uint256 index) {
 	env e;
 
@@ -124,6 +1095,7 @@ rule monotonicityOfMint(address user, uint256 amount, uint256 index) {
     assert _ATokenScaledTotalSupply < ATokenScaledTotalSupply_;
     assert _ATokenTotalSupply < ATokenTotalSupply_;
 }
+*/
 
 /*
     @Rule
@@ -154,6 +1126,8 @@ rule monotonicityOfMint(address user, uint256 amount, uint256 index) {
 
     @Link:
 */
+
+/*
 
 rule monotonicityOfBurn(address user, address reciver, uint256 amount, uint256 index) {
 	env e;
@@ -186,6 +1160,7 @@ rule monotonicityOfBurn(address user, address reciver, uint256 amount, uint256 i
     
     assert _underlyingReciverBalance <= underlyingReciverBalance_;
 }
+*/
 
 /*
     @Rule
@@ -215,6 +1190,7 @@ rule monotonicityOfBurn(address user, address reciver, uint256 amount, uint256 i
     @Link:
 */
 
+/*
 rule mintBurnInvertability(address user, uint256 amount, uint256 index, address reciver){
     env e;
     
@@ -242,6 +1218,7 @@ rule mintBurnInvertability(address user, uint256 amount, uint256 index, address 
     assert _ATokenScaledTotalSupply == ATokenScaledTotalSupply_;
     assert _ATokenTotalSupply == ATokenTotalSupply_;
 }
+*/
 
 /*
     @Rule
@@ -265,6 +1242,7 @@ rule mintBurnInvertability(address user, uint256 amount, uint256 index, address 
     @Link:
 */
 
+/*
 rule aTokenCantAffectUnderlying(){
     env e; calldataarg args; method f;
 
@@ -274,6 +1252,7 @@ rule aTokenCantAffectUnderlying(){
 
     assert _underlyingTotalSupply == underlyingTotalSupply_;
 }
+*/
 
 /*
     @Rule
@@ -299,6 +1278,7 @@ rule aTokenCantAffectUnderlying(){
     @Link:
 */
 
+/*
 rule operationAffectMaxTwo(address user1, address user2, address user3)
 {
 	env e; calldataarg arg; method f;
@@ -360,39 +1340,17 @@ rule operationAffectMaxTwo(address user1, address user2, address user3)
     @Link:
 */
 
-rule integrityBalanceOfTotalSupply(address user1, address user2){
-	env e; calldataarg arg; method f;
-    require user1 != user2;
-	
-    mathint _ATokenInternalBalance1 = internalBalanceOf(user1);
-    mathint _ATokenInternalBalance2 = internalBalanceOf(user2);
-    mathint _ATokenScaledBalance1 = scaledBalanceOf(user1);
-    mathint _ATokenScaledBalance2 = scaledBalanceOf(user2);
-    mathint _ATokenBalance1 = balanceOf(user1);
-    mathint _ATokenBalance2 = balanceOf(user2);
-    mathint _ATokenInternalTotalSupply = internalTotalSupply();
-    mathint _ATokenScaledTotalSupply = scaledTotalSupply();
-    mathint _ATokenTotalSupply = totalSupply();
-	 
-	f(e, arg); 
-
-    mathint ATokenInternalBalance1_ = internalBalanceOf(user1);
-    mathint ATokenInternalBalance2_ = internalBalanceOf(user2);
-    mathint ATokenScaledBalance1_ = scaledBalanceOf(user1);
-    mathint ATokenScaledBalance2_ = scaledBalanceOf(user2);
-    mathint ATokenBalance1_ = balanceOf(user1);
-    mathint ATokenBalance2_ = balanceOf(user2);
-    mathint ATokenInternalTotalSupply_ = internalTotalSupply();
-    mathint ATokenScaledTotalSupply_ = scaledTotalSupply();
-    mathint ATokenTotalSupply_ = totalSupply();
-
-    assert ((ATokenInternalBalance1_ != _ATokenInternalBalance1) && (ATokenInternalBalance2_ != _ATokenInternalBalance2)) =>
-            (ATokenInternalBalance1_ - _ATokenInternalBalance1) + (ATokenInternalBalance2_ - _ATokenInternalBalance2)  == (ATokenInternalTotalSupply_ - _ATokenInternalTotalSupply);
-    assert ((ATokenScaledBalance1_ != _ATokenScaledBalance1) && (ATokenScaledBalance2_ != _ATokenScaledBalance2)) =>
-            (ATokenScaledBalance1_ - _ATokenScaledBalance1) + (ATokenScaledBalance2_ - _ATokenScaledBalance2)  == (ATokenScaledTotalSupply_ - _ATokenScaledTotalSupply);
-    assert ((ATokenBalance1_ != _ATokenBalance1) && (ATokenBalance2_ != _ATokenBalance2)) =>
-            (ATokenBalance1_ - _ATokenBalance1) + (ATokenBalance2_ - _ATokenBalance2)  == (ATokenTotalSupply_ - ATokenTotalSupply_);
-}
+/*
+invariant atokenPeggedToUnderlying(env e)
+    UNDERLYING_ASSET.balanceOf(currentContract) >= totalSupply()
+    filtered { f -> f.selector != mint(address ,uint256 ,uint256).selector &&
+                    f.selector != mintToTreasury(uint256, uint256).selector }
+    {
+        preserved with (env e2) {
+            require currentContract != LENDING_POOL;
+        }
+    }
+*/
 
 /*
     @Rule
@@ -536,6 +1494,7 @@ invariant totalSupplyGESingleUserBalance(address user, env e)
     @Link:
 */
 
+/* 
 rule nonrevertOfBurn(address user, address to, uint256 amount) {
 	env e;
 	uint256 index;

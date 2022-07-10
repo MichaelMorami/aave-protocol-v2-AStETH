@@ -24,7 +24,7 @@ abstract contract VersionedInitializable {
   /**
    * @dev Indicates that the contract is in the process of being initialized.
    */
-  bool private initializing;
+  bool public initializing;
 
   /**
    * @dev Modifier to use in the initializer function of a contract.
